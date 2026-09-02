@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка — обращения</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'requests', newRequestsCount }) %>
+
+  <main class="container admin-main">
+    <div class="admin-section-header admin-section-header--wide">
+      <div>
+        <h2 class="admin-section-title">Обращения с сайта</h2>
+        <span class="admin-section-count"><%= leads.length %> шт.</span>
+      </div>
+      <div class="admin-requests-toolbar">
+        <span class="auto-refresh-indicator" id="autoRefreshIndicator">Автообновление: раз в 5 сек</span>
+        <a href="/admin/requests/export.xlsx" class="btn btn-outline btn-small">Скачать в Excel</a>
+      </div>
+    </div>
+
+    <% if (leads.length === 0) { %>
+      <p class="admin-empty">Пока нет ни одного обращения — они появятся здесь, как только кто-то отправит заявку с сайта.</p>
+    <% } else { %>
+      <div class="leads-table-wrap">
+        <table class="leads-table">
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Имя</th>
+              <th>Контакты</th>
+              <th>Статус</th>
+              <th>Комментарий</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% leads.forEach(function(lead) { %>
+              <tr>
+                <td><%= new Date(lead.createdAt).toLocaleString('ru-RU') %></td>
+                <td><%= lead.name %></td>
+                <td class="leads-contacts-cell">
+                  <% if (lead.phone) { %>
+                    <a href="tel:<%= lead.phone.replace(/[^+\d]/g, '') %>"><%= lead.phone %></a>
+                  <% } %>
+                  <% if (lead.email) { %>
+                    <a href="mailto:<%= lead.email %>"><%= lead.email %></a>
+                  <% } %>
+                  <% if (!lead.phone && !lead.email) { %>
+                    <span class="admin-empty--small">—</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (lead.status === 'new') { %>
+                    <span class="status-badge status-badge--new">Новая</span>
+                  <% } else if (lead.status === 'completed') { %>
+                    <span class="status-badge status-badge--completed">Выполнена</span>
+                  <% } else { %>
+                    <span class="status-badge status-badge--rejected">Отклонена</span>
+                  <% } %>
+                </td>
+                <td class="leads-comment-cell">
+                  <form method="POST" action="/admin/requests/<%= lead.id %>/comment" class="comment-form">
+                    <textarea name="comment" rows="2" placeholder="Заметка по заявке…" data-editing-guard><%= lead.comment || '' %></textarea>
+                    <button type="submit" class="btn btn-outline btn-small">Сохранить</button>
+                  </form>
+                </td>
+                <td class="leads-actions">
+                  <% if (lead.status !== 'completed') { %>
+                    <form method="POST" action="/admin/requests/<%= lead.id %>/status">
+                      <input type="hidden" name="status" value="completed">
+                      <button type="submit" class="btn btn-small btn-success">Выполнена</button>
+                    </form>
+                  <% } %>
+                  <% if (lead.status !== 'rejected') { %>
+                    <form method="POST" action="/admin/requests/<%= lead.id %>/status">
+                      <input type="hidden" name="status" value="rejected">
+                      <button type="submit" class="btn btn-small btn-danger">Отклонить</button>
+                    </form>
+                  <% } %>
+                  <% if (lead.status !== 'new') { %>
+                    <form method="POST" action="/admin/requests/<%= lead.id %>/status">
+                      <input type="hidden" name="status" value="new">
+                      <button type="submit" class="btn btn-small btn-outline">Вернуть в новые</button>
+                    </form>
+                  <% } %>
+                  <form method="POST" action="/admin/requests/<%= lead.id %>/delete"
+                        onsubmit="return confirm('Удалить обращение от «<%= lead.name.replace(/'/g, '') %>» полностью? Это действие нельзя отменить.');">
+                    <button type="submit" class="btn btn-small btn-danger">Удалить</button>
+                  </form>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </main>
+
+  <script>
+    // Автообновление списка раз в 5 секунд. Не перезагружаем страницу,
+    // пока админ печатает комментарий, чтобы не потерять несохранённый текст.
+    (function () {
+      var editing = false;
+      document.querySelectorAll('[data-editing-guard]').forEach(function (el) {
+        el.addEventListener('focus', function () { editing = true; });
+        el.addEventListener('blur', function () { editing = false; });
+      });
+      setInterval(function () {
+        if (!editing) window.location.reload();
+      }, 5000);
+    })();
+  </script>
+</body>
+</html>

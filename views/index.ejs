@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= content.hero.title %></title>
+  <meta name="description" content="<%= content.hero.subtitle %>">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <section class="hero" style="background-image: linear-gradient(180deg, rgba(20,24,20,.35), rgba(20,24,20,.65)), url('<%= content.hero.image %>')">
+    <div class="container hero-inner">
+      <h1><%= content.hero.title %></h1>
+      <p class="hero-subtitle"><%= content.hero.subtitle %></p>
+      <a href="#form" class="btn btn-accent">Получить презентацию проектов</a>
+    </div>
+  </section>
+
+  <section class="intro container">
+    <p>Одноэтажный дом — это удобство без лестниц, единое пространство для всей семьи и простая эксплуатация.
+      Мы собрали пять современных проектов площадью от 84 до 178 м², которые сочетают продуманную планировку,
+      светлые интерьеры и энергоэффективные технологии строительства.</p>
+  </section>
+
+  <section id="advantages" class="advantages">
+    <div class="container">
+      <h2 class="section-title">5 причин выбрать одноэтажный дом</h2>
+      <div class="advantages-grid">
+        <% content.advantages.forEach(function(adv, i) { %>
+          <div class="advantage-card">
+            <% if (adv.image) { %>
+              <img class="advantage-icon" src="<%= adv.image %>" alt="<%= adv.title %>">
+            <% } %>
+            <span class="advantage-num"><%= String(i + 1).padStart(2, '0') %></span>
+            <h3><%= adv.title %></h3>
+            <p><%= adv.text %></p>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+  </section>
+
+  <section id="houses" class="houses">
+    <div class="container">
+      <h2 class="section-title">Топ‑5 проектов</h2>
+      <div class="houses-grid">
+        <% content.houses.forEach(function(house) { %>
+          <article class="house-card">
+            <a href="/houses/<%= house.id %>" class="house-card__image" style="background-image:url('<%= house.image %>')" aria-label="<%= house.title %>"></a>
+            <div class="house-card__body">
+              <h3><a href="/houses/<%= house.id %>" class="house-card__title-link"><%= house.title %></a></h3>
+              <div class="house-card__meta">
+                <span><%= house.area %></span>
+                <span><%= house.price %></span>
+              </div>
+              <p><%= house.description %></p>
+              <a href="/houses/<%= house.id %>" class="btn btn-outline">Узнать подробнее</a>
+            </div>
+          </article>
+        <% }); %>
+      </div>
+    </div>
+  </section>
+
+  <section id="form" class="cta">
+    <div class="container cta-inner">
+      <div class="cta-text">
+        <h2>Получите подробную презентацию проектов</h2>
+        <p>Оставьте заявку — пришлём планировки, цены и сроки строительства по каждому дому из подборки.</p>
+      </div>
+      <form class="cta-form" action="/request" method="POST" data-lead-form novalidate>
+        <input type="hidden" name="returnTo" value="/">
+        <input type="text" name="name" placeholder="Ваше имя" required>
+        <input type="tel" name="phone" placeholder="Телефон: +7 (___) ___-__-__" inputmode="tel">
+        <input type="email" name="email" placeholder="E-mail">
+        <p class="cta-form__hint" data-form-hint>Укажите телефон или e-mail — достаточно одного варианта.</p>
+        <button type="submit" class="btn btn-accent">Отправить заявку</button>
+        <p class="cta-form__note">Нажимая кнопку, вы соглашаетесь с обработкой персональных данных.</p>
+      </form>
+    </div>
+    <% if (sent) { %>
+      <div class="toast" id="toast">Спасибо! Ваша заявка отправлена, мы скоро свяжемся с вами.</div>
+    <% } %>
+    <% if (formError) { %>
+      <div class="toast toast--error" id="toastError">Проверьте телефон/e-mail — укажите хотя бы одно поле в правильном формате.</div>
+    <% } %>
+  </section>
+
+  <%- include('partials/footer') %>
+
+  <script src="/js/main.js"></script>
+  <script src="/js/form-validation.js"></script>
+</body>
+</html>

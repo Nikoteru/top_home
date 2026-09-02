@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <defs>
+    <linearGradient id="ga4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f6b5a"/>
+      <stop offset="1" stop-color="#7fa38f"/>
+    </linearGradient>
+  </defs>
+  <rect width="240" height="240" rx="24" fill="url(#ga4)"/>
+  <text x="50%" y="55%" text-anchor="middle" font-family="Georgia, serif" font-size="72" fill="#ffffff" opacity="0.92">4</text>
+</svg>

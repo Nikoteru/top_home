@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600">
+  <defs>
+    <linearGradient id="gg12" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8a6d4f"/>
+      <stop offset="1" stop-color="#c2a06f"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="600" fill="url(#gg12)"/>
+  <g opacity="0.16" fill="#ffffff">
+    <rect x="160" y="340" width="580" height="200"/>
+    <polygon points="160,340 450,240 740,340"/>
+  </g>
+  <text x="50%" y="50%" text-anchor="middle" font-family="Georgia, serif" font-size="30" fill="#ffffff" opacity="0.9">Дом 1 — Гостиная</text>
+  <text x="50%" y="57%" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="#ffffff" opacity="0.6">Заглушка — замените фото в админке</text>
+</svg>

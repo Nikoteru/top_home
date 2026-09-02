@@ -1,0 +1,21 @@
+{
+  "name": "top5-doma",
+  "version": "1.0.0",
+  "description": "Лендинг «Топ-5 современных одноэтажных домов» с админкой для управления изображениями",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "multer": "^2.0.1"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
+}

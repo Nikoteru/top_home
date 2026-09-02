@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка — настройки</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'settings', newRequestsCount }) %>
+
+  <main class="container admin-main">
+    <h2 class="admin-section-title">Логин и пароль администратора</h2>
+
+    <% if (saved) { %>
+      <div class="alert alert-success">Данные для входа обновлены.</div>
+    <% } %>
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
+    <% } %>
+
+    <section class="admin-card admin-card--settings">
+      <form method="POST" action="/admin/settings/credentials" class="admin-upload-form">
+        <label>Текущий логин
+          <input type="text" value="<%= username %>" disabled>
+        </label>
+        <label>Новый логин
+          <input type="text" name="newUsername" value="<%= username %>" required>
+        </label>
+
+        <hr class="settings-divider">
+
+        <label>Новый пароль <span class="field-hint">(оставьте пустым, если меняете только логин)</span>
+          <input type="password" name="newPassword" autocomplete="new-password" minlength="6">
+        </label>
+        <label>Повторите новый пароль
+          <input type="password" name="newPasswordConfirm" autocomplete="new-password" minlength="6">
+        </label>
+
+        <hr class="settings-divider">
+
+        <label>Текущий пароль <span class="field-hint">(обязательно, для подтверждения изменений)</span>
+          <input type="password" name="currentPassword" autocomplete="current-password" required>
+        </label>
+
+        <div class="admin-form-actions">
+          <button type="submit" class="btn btn-accent btn-small">Сохранить изменения</button>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

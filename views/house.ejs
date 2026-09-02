@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= house.title %> — <%= content.hero.title %></title>
+  <meta name="description" content="<%= house.description %>">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <section class="container house-detail">
+    <nav class="breadcrumb">
+      <a href="/">Главная</a> <span>/</span> <a href="/#houses">Проекты</a> <span>/</span> <span><%= house.title %></span>
+    </nav>
+
+    <div class="house-detail-gallery">
+      <button type="button" class="gallery-main" id="galleryMain" style="background-image:url('<%= (house.gallery && house.gallery[0]) || house.image %>')" aria-label="Открыть фото на весь экран">
+        <span class="gallery-zoom-hint">⤢ Увеличить</span>
+      </button>
+      <% if (house.gallery && house.gallery.length > 1) { %>
+        <div class="gallery-thumbs">
+          <% house.gallery.forEach(function(photo, i) { %>
+            <button type="button" class="gallery-thumb <%= i === 0 ? 'is-active' : '' %>" data-image="<%= photo %>">
+              <img src="<%= photo %>" alt="<%= house.title %> — фото <%= i + 1 %>">
+            </button>
+          <% }); %>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="lightbox" id="lightbox" hidden>
+      <button type="button" class="lightbox-close" id="lightboxClose" aria-label="Закрыть">✕</button>
+      <button type="button" class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Предыдущее фото">‹</button>
+      <img class="lightbox-image" id="lightboxImage" src="" alt="">
+      <button type="button" class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Следующее фото">›</button>
+      <div class="lightbox-counter" id="lightboxCounter"></div>
+    </div>
+
+    <script>
+      window.HOUSE_GALLERY = <%- JSON.stringify(house.gallery && house.gallery.length ? house.gallery : [house.image]) %>;
+    </script>
+
+    <div class="house-detail-body">
+      <div class="house-detail-main">
+        <h1><%= house.title %></h1>
+        <div class="house-detail-meta">
+          <span class="house-detail-price"><%= house.price %></span>
+          <span class="house-detail-area"><%= house.area %></span>
+        </div>
+        <p class="house-detail-description"><%= house.fullDescription || house.description %></p>
+
+        <% if (house.specs && house.specs.length > 0) { %>
+          <h2 class="section-title section-title--left">Характеристики</h2>
+          <dl class="specs-table">
+            <% house.specs.forEach(function(spec) { %>
+              <div class="specs-row">
+                <dt><%= spec.label %></dt>
+                <dd><%= spec.value %></dd>
+              </div>
+            <% }); %>
+          </dl>
+        <% } %>
+      </div>
+
+      <aside class="house-detail-side" id="form">
+        <div class="house-detail-card">
+          <h3>Оставить заявку на проект «<%= house.title %>»</h3>
+          <p>Пришлём подробную презентацию, планировки и расчёт стоимости.</p>
+          <form action="/request" method="POST" class="side-form" data-lead-form novalidate>
+            <input type="hidden" name="returnTo" value="/houses/<%= house.id %>">
+            <input type="text" name="name" placeholder="Ваше имя" required>
+            <input type="tel" name="phone" placeholder="Телефон: +7 (___) ___-__-__" inputmode="tel">
+            <input type="email" name="email" placeholder="E-mail">
+            <p class="cta-form__hint side-form__hint" data-form-hint>Укажите телефон или e-mail — достаточно одного варианта.</p>
+            <button type="submit" class="btn btn-accent">Отправить заявку</button>
+          </form>
+          <% if (sent) { %>
+            <p class="side-form__success">Спасибо! Заявка отправлена, мы скоро свяжемся с вами.</p>
+          <% } %>
+          <% if (formError) { %>
+            <p class="side-form__error">Проверьте телефон/e-mail — укажите хотя бы одно поле в правильном формате.</p>
+          <% } %>
+        </div>
+      </aside>
+    </div>
+
+    <% if (otherHouses.length > 0) { %>
+      <section class="related-houses">
+        <h2 class="section-title">Другие проекты</h2>
+        <div class="houses-grid">
+          <% otherHouses.forEach(function(h) { %>
+            <article class="house-card">
+              <a href="/houses/<%= h.id %>" class="house-card__image" style="background-image:url('<%= h.image %>')" aria-label="<%= h.title %>"></a>
+              <div class="house-card__body">
+                <h3><a href="/houses/<%= h.id %>" class="house-card__title-link"><%= h.title %></a></h3>
+                <div class="house-card__meta">
+                  <span><%= h.area %></span>
+                  <span><%= h.price %></span>
+                </div>
+                <a href="/houses/<%= h.id %>" class="btn btn-outline">Узнать подробнее</a>
+              </div>
+            </article>
+          <% }); %>
+        </div>
+      </section>
+    <% } %>
+  </section>
+
+  <%- include('partials/footer') %>
+
+  <script src="/js/main.js"></script>
+  <script src="/js/house.js"></script>
+  <script src="/js/form-validation.js"></script>
+</body>
+</html>

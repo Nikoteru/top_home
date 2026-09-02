@@ -1,0 +1,24 @@
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <div>
+      <a href="/" class="logo logo--light">Топ<span>5</span>Домов</a>
+      <p class="footer-text">Современные проекты одноэтажных домов «под ключ».</p>
+    </div>
+    <div class="footer-col">
+      <h4>Разделы</h4>
+      <a href="#houses">Проекты</a>
+      <a href="#advantages">Преимущества</a>
+      <a href="#form">Оставить заявку</a>
+    </div>
+    <div class="footer-col">
+      <h4>Контакты</h4>
+      <a href="tel:<%= content.contacts.phone.replace(/[^+\d]/g, '') %>"><%= content.contacts.phone %></a>
+      <a href="mailto:<%= content.contacts.email %>"><%= content.contacts.email %></a>
+      <span><%= content.contacts.address %></span>
+    </div>
+  </div>
+  <div class="container footer-bottom">
+    <span>© <%= new Date().getFullYear() %> Топ5Домов. Все права защищены.</span>
+    <a href="/admin" class="footer-admin-link">Вход для администратора</a>
+  </div>
+</footer>

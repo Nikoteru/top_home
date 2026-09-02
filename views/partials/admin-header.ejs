@@ -1,0 +1,21 @@
+<header class="admin-header">
+  <div class="container admin-header-inner">
+    <span class="logo">Админка</span>
+    <nav class="admin-nav">
+      <a href="/admin" class="<%= active === 'dashboard' ? 'is-active' : '' %>">Контент сайта</a>
+      <a href="/admin/requests" class="<%= active === 'requests' ? 'is-active' : '' %>">
+        Обращения
+        <% if (newRequestsCount > 0) { %>
+          <span class="admin-badge"><%= newRequestsCount %></span>
+        <% } %>
+      </a>
+      <a href="/admin/settings" class="<%= active === 'settings' ? 'is-active' : '' %>">Настройки</a>
+    </nav>
+    <div class="admin-header-actions">
+      <a href="/" target="_blank" class="btn btn-outline btn-small">Открыть сайт</a>
+      <form method="POST" action="/admin/logout">
+        <button type="submit" class="btn btn-ghost btn-small">Выйти</button>
+      </form>
+    </div>
+  </div>
+</header>

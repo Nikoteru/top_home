@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка — управление сайтом</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'dashboard', newRequestsCount }) %>
+
+  <main class="container admin-main">
+    <% if (saved) { %>
+      <div class="alert alert-success">Изменения сохранены.</div>
+    <% } %>
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
+    <% } %>
+
+    <section class="admin-card">
+      <h2>Hero-баннер (главное изображение)</h2>
+      <div class="admin-card__row">
+        <img class="admin-preview" src="<%= content.hero.image %>" alt="Hero">
+        <form method="POST" action="/admin/upload/hero" enctype="multipart/form-data" class="admin-upload-form">
+          <label>Новое изображение
+            <input type="file" name="image" accept="image/*" required>
+          </label>
+          <button type="submit" class="btn btn-accent btn-small">Заменить картинку</button>
+        </form>
+      </div>
+    </section>
+
+    <h2 class="admin-section-title">Блок «5 причин выбрать одноэтажный дом»</h2>
+    <div class="admin-houses-grid">
+      <% content.advantages.forEach(function(adv) { %>
+        <section class="admin-card">
+          <div class="admin-card__row">
+            <img class="admin-preview admin-preview--house" src="<%= adv.image %>" alt="<%= adv.title %>">
+            <form method="POST" action="/admin/advantage/<%= adv.id %>" enctype="multipart/form-data" class="admin-upload-form">
+              <label>Заголовок
+                <input type="text" name="title" value="<%= adv.title %>" required>
+              </label>
+              <label>Текст
+                <textarea name="text" rows="3"><%= adv.text %></textarea>
+              </label>
+              <label>Заменить изображение
+                <input type="file" name="image" accept="image/*">
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="btn btn-accent btn-small">Сохранить</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      <% }); %>
+    </div>
+
+    <h2 class="admin-section-title">Контактная информация</h2>
+    <section class="admin-card">
+      <form method="POST" action="/admin/contacts" class="admin-upload-form admin-contacts-form">
+        <div class="admin-form-grid admin-form-grid--3">
+          <label>Телефон
+            <input type="text" name="phone" value="<%= content.contacts.phone %>" required>
+          </label>
+          <label>E-mail
+            <input type="email" name="email" value="<%= content.contacts.email %>">
+          </label>
+          <label>Адрес
+            <input type="text" name="address" value="<%= content.contacts.address %>">
+          </label>
+        </div>
+        <div class="admin-form-actions">
+          <button type="submit" class="btn btn-accent btn-small">Сохранить контакты</button>
+        </div>
+      </form>
+    </section>
+
+    <div class="admin-section-header">
+      <h2 class="admin-section-title">Карточки домов</h2>
+      <span class="admin-section-count"><%= content.houses.length %> шт.</span>
+    </div>
+    <div class="admin-houses-list">
+      <% content.houses.forEach(function(house) { %>
+        <section class="admin-card admin-house-card">
+          <div class="admin-card__row">
+            <img class="admin-preview admin-preview--house" src="<%= house.image %>" alt="<%= house.title %>">
+            <form method="POST" action="/admin/house/<%= house.id %>" enctype="multipart/form-data" class="admin-upload-form">
+              <label>Название
+                <input type="text" name="title" value="<%= house.title %>" required>
+              </label>
+              <div class="admin-form-grid">
+                <label>Площадь
+                  <input type="text" name="area" value="<%= house.area %>">
+                </label>
+                <label>Цена
+                  <input type="text" name="price" value="<%= house.price %>">
+                </label>
+              </div>
+              <label>Короткое описание <span class="field-hint">(в карточке на главной)</span>
+                <textarea name="description" rows="2"><%= house.description %></textarea>
+              </label>
+              <label>Полное описание <span class="field-hint">(на странице дома)</span>
+                <textarea name="fullDescription" rows="4"><%= house.fullDescription || '' %></textarea>
+              </label>
+              <label>Характеристики <span class="field-hint">(по одной на строку, формат «Метка: Значение»)</span>
+                <textarea name="specs" rows="6" class="specs-textarea" placeholder="Спальни: 3&#10;Санузлы: 2&#10;Материал стен: клеёный брус"><%= (house.specs || []).map(function(s) { return s.label + ': ' + s.value; }).join('\n') %></textarea>
+              </label>
+              <label>Заменить главное изображение
+                <input type="file" name="image" accept="image/*">
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="btn btn-accent btn-small">Сохранить</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="admin-gallery-section">
+            <h4>Галерея (фото на странице дома)</h4>
+            <% if (house.gallery && house.gallery.length > 0) { %>
+              <div class="admin-gallery-grid">
+                <% house.gallery.forEach(function(photo, i) { %>
+                  <div class="admin-gallery-item">
+                    <img src="<%= photo %>" alt="Фото <%= i + 1 %>">
+                    <form method="POST" action="/admin/house/<%= house.id %>/gallery/<%= i %>/delete"
+                          onsubmit="return confirm('Удалить это фото из галереи?');">
+                      <button type="submit" class="btn btn-danger btn-small">Удалить</button>
+                    </form>
+                  </div>
+                <% }); %>
+              </div>
+            <% } else { %>
+              <p class="admin-empty admin-empty--small">Фотографий пока нет.</p>
+            <% } %>
+            <form method="POST" action="/admin/house/<%= house.id %>/gallery" enctype="multipart/form-data" class="admin-gallery-upload">
+              <label>Добавить фото <span class="field-hint">(можно выбрать сразу несколько)</span>
+                <input type="file" name="images" accept="image/*" multiple required>
+              </label>
+              <button type="submit" class="btn btn-outline btn-small">Загрузить в галерею</button>
+            </form>
+          </div>
+
+          <form method="POST" action="/admin/house/<%= house.id %>/delete"
+                class="admin-delete-form"
+                onsubmit="return confirm('Удалить дом «<%= house.title.replace(/'/g, '') %>»? Это действие нельзя отменить.');">
+            <button type="submit" class="btn btn-danger btn-small">Удалить дом полностью</button>
+          </form>
+        </section>
+      <% }); %>
+
+      <section class="admin-card admin-card--new">
+        <h3 class="admin-new-title">+ Добавить новый дом</h3>
+        <form method="POST" action="/admin/house" enctype="multipart/form-data" class="admin-upload-form">
+          <label>Название *
+            <input type="text" name="title" placeholder="Например, Дом «Терраса»" required>
+          </label>
+          <div class="admin-form-grid">
+            <label>Площадь
+              <input type="text" name="area" placeholder="120 м²">
+            </label>
+            <label>Цена
+              <input type="text" name="price" placeholder="от 5 000 000 ₽">
+            </label>
+          </div>
+          <label>Короткое описание <span class="field-hint">(в карточке на главной)</span>
+            <textarea name="description" rows="2" placeholder="Короткое описание проекта"></textarea>
+          </label>
+          <label>Полное описание <span class="field-hint">(на странице дома)</span>
+            <textarea name="fullDescription" rows="4" placeholder="Развёрнутое описание проекта"></textarea>
+          </label>
+          <label>Характеристики <span class="field-hint">(по одной на строку, формат «Метка: Значение»)</span>
+            <textarea name="specs" rows="6" class="specs-textarea" placeholder="Спальни: 3&#10;Санузлы: 2&#10;Материал стен: клеёный брус"></textarea>
+          </label>
+          <label>Изображение
+            <input type="file" name="image" accept="image/*">
+          </label>
+          <div class="admin-form-actions">
+            <button type="submit" class="btn btn-accent btn-small">Добавить дом</button>
+          </div>
+          <p class="field-hint">Фотографии галереи можно будет добавить сразу после создания дома — ниже в списке.</p>
+        </form>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
