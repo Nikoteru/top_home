@@ -1,9 +1,20 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { getContent } = require('../data/store');
 const { addLead } = require('../data/leadsStore');
 const { isValidRuPhone, isValidEmail, formatRuPhone } = require('../utils/validate');
 
 const router = express.Router();
+
+// Ограничиваем частоту отправки заявок с одного IP — форма публичная,
+// без этого её легко завалить спамом.
+const requestLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Слишком много заявок подряд. Попробуйте снова через несколько минут.' },
+});
 
 router.get('/', (req, res) => {
   const content = getContent();
@@ -34,12 +45,16 @@ router.get('/houses/:id', (req, res) => {
 // и становится видна администратору в разделе /admin/requests.
 // Требования: имя обязательно, из телефона/e-mail — хотя бы одно поле,
 // и заполненное поле должно проходить валидацию формата.
-router.post('/request', (req, res) => {
+router.post('/request', requestLimiter, (req, res) => {
   const { name, phone, email, returnTo } = req.body;
   const trimmedName = (name || '').trim();
   const trimmedPhone = (phone || '').trim();
   const trimmedEmail = (email || '').trim();
-  const target = returnTo && returnTo.startsWith('/') ? returnTo : '/';
+  // Разрешаем только относительный внутренний путь: "//host/..." или
+  // "/\host/..." браузер трактует как переход на другой домен (open redirect),
+  // поэтому такие значения отбрасываем и уходим на главную.
+  const isSafeInternalPath = (value) => /^\/(?!\/|\\)/.test(value || '');
+  const target = isSafeInternalPath(returnTo) ? returnTo : '/';
 
   const hasContact = trimmedPhone || trimmedEmail;
   const phoneValid = !trimmedPhone || isValidRuPhone(trimmedPhone);

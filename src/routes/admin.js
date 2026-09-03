@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const ExcelJS = require('exceljs');
+const rateLimit = require('express-rate-limit');
 const { getContent, saveContent } = require('../data/store');
 const { getLeads, updateLeadStatus, updateLeadComment, deleteLead } = require('../data/leadsStore');
 const { getAdmin, verifyLogin, updateCredentials } = require('../data/adminStore');
@@ -12,12 +13,27 @@ const { requireAuth } = require('../middleware/auth');
 const STATUS_LABELS = { new: 'Новая', completed: 'Выполнена', rejected: 'Отклонена' };
 
 const DEFAULT_HOUSE_IMAGE = '/images/placeholder-new.svg';
+const UPLOAD_DIR = path.join(__dirname, '..', '..', 'public', 'uploads');
+const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
+
+// Не даём подбирать пароль администратора перебором: 10 попыток за 15 минут с одного IP.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Слишком много попыток входа. Попробуйте снова через 15 минут.' },
+});
 
 // Удаляет файл картинки, только если он был загружен через админку
 // (лежит в /uploads) — картинки-заглушки из /images трогать нельзя.
+// Дополнительно проверяем, что итоговый путь не убежал за пределы public/
+// через "../" — сейчас imagePath всегда приходит из наших же данных, но
+// это дешёвая защита на случай, если логика когда-нибудь изменится.
 function deleteUploadedImage(imagePath) {
   if (!imagePath || !imagePath.startsWith('/uploads/')) return;
-  const filePath = path.join(__dirname, '..', '..', 'public', imagePath);
+  const filePath = path.join(PUBLIC_DIR, imagePath);
+  if (!filePath.startsWith(UPLOAD_DIR + path.sep)) return;
   fs.unlink(filePath, () => {}); // не страшно, если файла уже нет
 }
 
@@ -48,24 +64,36 @@ function serializeSpecs(specs) {
 
 const router = express.Router();
 
-const UPLOAD_DIR = path.join(__dirname, '..', '..', 'public', 'uploads');
+// Расширение сохранённого файла берём из проверенного MIME-типа, а не из
+// имени файла, которое прислал браузер — оно полностью подконтрольно
+// пользователю и его нельзя использовать напрямую (иначе можно было бы,
+// подделав заголовок Content-Type, сохранить .html-файл под видом фото и
+// получить его же обратно по прямой ссылке из /uploads).
+// SVG сюда намеренно не входит: SVG может содержать <script> и выполнится,
+// если кто-то откроет файл по прямой ссылке — а фото домов должны быть
+// растровыми, так что этим ничем не жертвуем.
+const MIME_TO_EXT = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+const ALLOWED_TYPES = new Set(Object.keys(MIME_TO_EXT));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
+    const ext = MIME_TO_EXT[file.mimetype] || '';
     cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`);
   },
 });
-
-const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml', 'image/gif']);
 
 const upload = multer({
   storage,
   limits: { fileSize: 8 * 1024 * 1024 }, // 8 МБ на файл
   fileFilter: (req, file, cb) => {
     if (!ALLOWED_TYPES.has(file.mimetype)) {
-      return cb(new Error('Разрешены только изображения (jpg, png, webp, gif, svg)'));
+      return cb(new Error('Разрешены только изображения (jpg, png, webp, gif)'));
     }
     cb(null, true);
   },
@@ -78,7 +106,7 @@ router.get('/login', (req, res) => {
   res.render('admin/login', { error: null });
 });
 
-router.post('/login', (req, res) => {
+router.post('/login', loginLimiter, (req, res) => {
   const { username, password } = req.body;
   if (username && password && verifyLogin(username, password)) {
     req.session.isAdmin = true;
@@ -137,37 +165,43 @@ router.post('/requests/:id/delete', requireAuth, (req, res) => {
 });
 
 // Выгрузка всех обращений в Excel (.xlsx)
-router.get('/requests/export.xlsx', requireAuth, async (req, res) => {
-  const leads = getLeads();
+// Express 4 не ловит отклонённые промисы сам — оборачиваем в try/catch
+// и передаём ошибку дальше через next(), иначе она уйдёт "в никуда".
+router.get('/requests/export.xlsx', requireAuth, async (req, res, next) => {
+  try {
+    const leads = getLeads();
 
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('Обращения');
-  sheet.columns = [
-    { header: 'Дата', key: 'date', width: 20 },
-    { header: 'Имя', key: 'name', width: 24 },
-    { header: 'Телефон', key: 'phone', width: 20 },
-    { header: 'E-mail', key: 'email', width: 26 },
-    { header: 'Статус', key: 'status', width: 16 },
-    { header: 'Комментарий', key: 'comment', width: 40 },
-  ];
-  sheet.getRow(1).font = { bold: true };
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Обращения');
+    sheet.columns = [
+      { header: 'Дата', key: 'date', width: 20 },
+      { header: 'Имя', key: 'name', width: 24 },
+      { header: 'Телефон', key: 'phone', width: 20 },
+      { header: 'E-mail', key: 'email', width: 26 },
+      { header: 'Статус', key: 'status', width: 16 },
+      { header: 'Комментарий', key: 'comment', width: 40 },
+    ];
+    sheet.getRow(1).font = { bold: true };
 
-  leads.forEach((lead) => {
-    sheet.addRow({
-      date: new Date(lead.createdAt).toLocaleString('ru-RU'),
-      name: lead.name,
-      phone: lead.phone || '',
-      email: lead.email || '',
-      status: STATUS_LABELS[lead.status] || lead.status,
-      comment: lead.comment || '',
+    leads.forEach((lead) => {
+      sheet.addRow({
+        date: new Date(lead.createdAt).toLocaleString('ru-RU'),
+        name: lead.name,
+        phone: lead.phone || '',
+        email: lead.email || '',
+        status: STATUS_LABELS[lead.status] || lead.status,
+        comment: lead.comment || '',
+      });
     });
-  });
 
-  const buffer = await workbook.xlsx.writeBuffer();
-  const filename = `Обращения-${new Date().toISOString().slice(0, 10)}.xlsx`;
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
-  res.send(buffer);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const filename = `Обращения-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ---- Настройки: смена логина и пароля администратора ----
@@ -206,8 +240,8 @@ router.post('/settings/credentials', requireAuth, (req, res) => {
     if (newPassword !== newPasswordConfirm) {
       return fail('Новый пароль и подтверждение не совпадают');
     }
-    if (newPassword.length < 6) {
-      return fail('Новый пароль должен быть не короче 6 символов');
+    if (newPassword.length < 8) {
+      return fail('Новый пароль должен быть не короче 8 символов');
     }
   }
 
@@ -219,14 +253,24 @@ router.post('/settings/credentials', requireAuth, (req, res) => {
 });
 
 // Загрузка/замена картинки hero-баннера
-router.post('/upload/hero', requireAuth, (req, res, next) => {
+router.post('/hero', requireAuth, (req, res) => {
   upload.single('image')(req, res, (err) => {
     if (err) return renderDashboardError(req, res, err.message);
-    if (!req.file) return renderDashboardError(req, res, 'Файл не выбран');
+
+    const { title, subtitle } = req.body;
+    if (!title || !title.trim()) {
+      if (req.file) deleteUploadedImage(`/uploads/${req.file.filename}`);
+      return renderDashboardError(req, res, 'Заголовок не может быть пустым');
+    }
 
     const content = getContent();
-    deleteUploadedImage(content.hero.image);
-    content.hero.image = `/uploads/${req.file.filename}`;
+    content.hero.title = title.trim();
+    content.hero.subtitle = (subtitle || '').trim();
+    if (req.file) {
+      deleteUploadedImage(content.hero.image);
+      content.hero.image = `/uploads/${req.file.filename}`;
+    }
+
     saveContent(content);
     res.redirect('/admin?saved=1');
   });

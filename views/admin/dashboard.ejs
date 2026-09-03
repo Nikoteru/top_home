@@ -18,14 +18,22 @@
     <% } %>
 
     <section class="admin-card">
-      <h2>Hero-баннер (главное изображение)</h2>
+      <h2>Hero-баннер (главный экран сайта)</h2>
       <div class="admin-card__row">
         <img class="admin-preview" src="<%= content.hero.image %>" alt="Hero">
-        <form method="POST" action="/admin/upload/hero" enctype="multipart/form-data" class="admin-upload-form">
-          <label>Новое изображение
-            <input type="file" name="image" accept="image/*" required>
+        <form method="POST" action="/admin/hero" enctype="multipart/form-data" class="admin-upload-form">
+          <label>Заголовок
+            <input type="text" name="title" value="<%= content.hero.title %>" required>
           </label>
-          <button type="submit" class="btn btn-accent btn-small">Заменить картинку</button>
+          <label>Подзаголовок
+            <textarea name="subtitle" rows="2"><%= content.hero.subtitle %></textarea>
+          </label>
+          <label>Заменить изображение
+            <input type="file" name="image" accept="image/*">
+          </label>
+          <div class="admin-form-actions">
+            <button type="submit" class="btn btn-accent btn-small">Сохранить</button>
+          </div>
         </form>
       </div>
     </section>
@@ -79,9 +87,25 @@
       <h2 class="admin-section-title">Карточки домов</h2>
       <span class="admin-section-count"><%= content.houses.length %> шт.</span>
     </div>
-    <div class="admin-houses-list">
-      <% content.houses.forEach(function(house) { %>
-        <section class="admin-card admin-house-card">
+
+    <% if (content.houses.length > 0) { %>
+      <div class="admin-pager" id="housePager">
+        <button type="button" class="admin-pager__nav" id="housePagerPrev" aria-label="Предыдущий дом">‹</button>
+        <div class="admin-pager__list" id="housePagerList">
+          <% content.houses.forEach(function(house, i) { %>
+            <button type="button" class="admin-pager__item <%= i === 0 ? 'is-active' : '' %>" data-house-id="<%= house.id %>">
+              <%= house.title %>
+            </button>
+          <% }); %>
+        </div>
+        <button type="button" class="admin-pager__nav" id="housePagerNext" aria-label="Следующий дом">›</button>
+        <span class="admin-pager__counter" id="housePagerCounter">1 / <%= content.houses.length %></span>
+      </div>
+    <% } %>
+
+    <div class="admin-houses-list" id="housePages">
+      <% content.houses.forEach(function(house, i) { %>
+        <section class="admin-card admin-house-card" data-house-id="<%= house.id %>" <%= i !== 0 ? 'hidden' : '' %>>
           <div class="admin-card__row">
             <img class="admin-preview admin-preview--house" src="<%= house.image %>" alt="<%= house.title %>">
             <form method="POST" action="/admin/house/<%= house.id %>" enctype="multipart/form-data" class="admin-upload-form">
@@ -122,7 +146,7 @@
                   <div class="admin-gallery-item">
                     <img src="<%= photo %>" alt="Фото <%= i + 1 %>">
                     <form method="POST" action="/admin/house/<%= house.id %>/gallery/<%= i %>/delete"
-                          onsubmit="return confirm('Удалить это фото из галереи?');">
+                          data-confirm-delete="Удалить это фото из галереи?">
                       <button type="submit" class="btn btn-danger btn-small">Удалить</button>
                     </form>
                   </div>
@@ -141,14 +165,15 @@
 
           <form method="POST" action="/admin/house/<%= house.id %>/delete"
                 class="admin-delete-form"
-                onsubmit="return confirm('Удалить дом «<%= house.title.replace(/'/g, '') %>»? Это действие нельзя отменить.');">
+                data-confirm-delete="Удалить дом «<%= house.title %>»? Это действие нельзя отменить.">
             <button type="submit" class="btn btn-danger btn-small">Удалить дом полностью</button>
           </form>
         </section>
       <% }); %>
+    </div>
 
-      <section class="admin-card admin-card--new">
-        <h3 class="admin-new-title">+ Добавить новый дом</h3>
+    <section class="admin-card admin-card--new">
+      <h3 class="admin-new-title">+ Добавить новый дом</h3>
         <form method="POST" action="/admin/house" enctype="multipart/form-data" class="admin-upload-form">
           <label>Название *
             <input type="text" name="title" placeholder="Например, Дом «Терраса»" required>
@@ -178,8 +203,10 @@
           </div>
           <p class="field-hint">Фотографии галереи можно будет добавить сразу после создания дома — ниже в списке.</p>
         </form>
-      </section>
-    </div>
+    </section>
   </main>
+
+  <script src="/js/confirm-delete.js"></script>
+  <script src="/js/admin-house-pager.js"></script>
 </body>
 </html>

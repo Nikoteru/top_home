@@ -39,7 +39,9 @@
     </div>
 
     <script>
-      window.HOUSE_GALLERY = <%- JSON.stringify(house.gallery && house.gallery.length ? house.gallery : [house.image]) %>;
+      // "<" экранируем в <: если бы значение когда-нибудь содержало "</script>",
+      // это преждевременно закрыло бы тег ещё на этапе разбора HTML браузером.
+      window.HOUSE_GALLERY = <%- JSON.stringify(house.gallery && house.gallery.length ? house.gallery : [house.image]).replace(/</g, '\\u003c') %>;
     </script>
 
     <div class="house-detail-body">

@@ -87,7 +87,7 @@
                     </form>
                   <% } %>
                   <form method="POST" action="/admin/requests/<%= lead.id %>/delete"
-                        onsubmit="return confirm('Удалить обращение от «<%= lead.name.replace(/'/g, '') %>» полностью? Это действие нельзя отменить.');">
+                        data-confirm-delete="Удалить обращение от «<%= lead.name %>» полностью? Это действие нельзя отменить.">
                     <button type="submit" class="btn btn-small btn-danger">Удалить</button>
                   </form>
                 </td>
@@ -99,6 +99,7 @@
     <% } %>
   </main>
 
+  <script src="/js/confirm-delete.js"></script>
   <script>
     // Автообновление списка раз в 5 секунд. Не перезагружаем страницу,
     // пока админ печатает комментарий, чтобы не потерять несохранённый текст.
