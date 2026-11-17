@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка — портфолио</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'portfolio', newRequestsCount }) %>
+  <% var items = content.portfolio || []; %>
+
+  <main class="container admin-main">
+    <% if (saved) { %>
+      <div class="alert alert-success">Изменения сохранены.</div>
+    <% } %>
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
+    <% } %>
+
+    <div class="admin-section-header">
+      <h2 class="admin-section-title">Портфолио — реализованные объекты</h2>
+      <span class="admin-section-count"><%= items.length %> шт.</span>
+    </div>
+
+    <% if (items.length > 0) { %>
+      <div class="admin-pager" id="housePager">
+        <button type="button" class="admin-pager__nav" id="housePagerPrev" aria-label="Предыдущий объект">‹</button>
+        <div class="admin-pager__list" id="housePagerList">
+          <% items.forEach(function(item, i) { %>
+            <button type="button" class="admin-pager__item <%= i === 0 ? 'is-active' : '' %>" data-house-id="<%= item.id %>"><%= item.title %></button>
+          <% }); %>
+        </div>
+        <button type="button" class="admin-pager__nav" id="housePagerNext" aria-label="Следующий объект">›</button>
+        <span class="admin-pager__counter" id="housePagerCounter">1 / <%= items.length %></span>
+      </div>
+    <% } else { %>
+      <p class="admin-empty">Пока нет ни одного объекта. Добавьте первый с помощью формы ниже.</p>
+    <% } %>
+
+    <div class="admin-houses-list" id="housePages" data-storage-key="adminActivePortfolioId">
+      <% items.forEach(function(item, i) { var photos = item.photos || []; %>
+        <section class="admin-card admin-house-card" data-house-id="<%= item.id %>" <%= i !== 0 ? 'hidden' : '' %>>
+          <div class="admin-card__row">
+            <img class="admin-preview admin-preview--house" src="<%= photos[0] || '/images/placeholder-new.svg' %>" alt="<%= item.title %>">
+            <form method="POST" action="/admin/portfolio/<%= item.id %>" class="admin-upload-form">
+              <label>Название
+                <input type="text" name="title" value="<%= item.title %>" required>
+              </label>
+              <div class="admin-form-grid">
+                <label>Стоимость
+                  <input type="text" name="price" value="<%= item.price || '' %>" placeholder="6 800 000 ₽">
+                </label>
+                <label>Адрес для Google Карты
+                  <input type="text" name="address" value="<%= item.address || '' %>" placeholder="Московская обл., пос. Лесной, ул. Сосновая, 12">
+                </label>
+              </div>
+              <p class="field-hint">Можно указать адрес или координаты, например «55.7558, 37.6173». Карта на сайте построится автоматически.
+                <% if (item.address) { %>
+                  <a class="admin-map-check" href="https://www.google.com/maps/search/?api=1&query=<%= encodeURIComponent(item.address) %>" target="_blank" rel="noopener">Проверить на карте ↗</a>
+                <% } %>
+              </p>
+              <label>Описание
+                <textarea name="description" rows="5"><%= item.description || '' %></textarea>
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="btn btn-accent btn-small">Сохранить</button>
+                <a href="/portfolio/<%= item.id %>" target="_blank" class="btn btn-ghost btn-small">Открыть на сайте ↗</a>
+              </div>
+            </form>
+          </div>
+
+          <div class="admin-gallery-section">
+            <h4>Фотографии <span class="field-hint">(<%= photos.length %> шт., первая — обложка)</span></h4>
+            <% if (photos.length > 0) { %>
+              <div class="admin-gallery-grid">
+                <% photos.forEach(function(photo, pi) { %>
+                  <div class="admin-gallery-item <%= pi === 0 ? 'is-cover' : '' %>">
+                    <img src="<%= photo %>" alt="Фото <%= pi + 1 %>">
+                    <% if (pi === 0) { %>
+                      <span class="admin-cover-badge">Обложка</span>
+                    <% } else { %>
+                      <form method="POST" action="/admin/portfolio/<%= item.id %>/photos/<%= pi %>/cover">
+                        <button type="submit" class="btn btn-outline btn-small">Сделать обложкой</button>
+                      </form>
+                    <% } %>
+                    <form method="POST" action="/admin/portfolio/<%= item.id %>/photos/<%= pi %>/delete"
+                          data-confirm-delete="Удалить это фото?">
+                      <button type="submit" class="btn btn-danger btn-small">Удалить</button>
+                    </form>
+                  </div>
+                <% }); %>
+              </div>
+            <% } else { %>
+              <p class="admin-empty admin-empty--small">Фотографий пока нет.</p>
+            <% } %>
+            <form method="POST" action="/admin/portfolio/<%= item.id %>/photos" enctype="multipart/form-data" class="admin-gallery-upload">
+              <label>Добавить фото <span class="field-hint">(можно выбрать сразу несколько, до 30 за раз)</span>
+                <input type="file" name="photos" accept="image/*" multiple required>
+              </label>
+              <button type="submit" class="btn btn-outline btn-small">Загрузить</button>
+            </form>
+          </div>
+
+          <form method="POST" action="/admin/portfolio/<%= item.id %>/delete"
+                class="admin-delete-form"
+                data-confirm-delete="Удалить объект «<%= item.title %>» вместе со всеми фото? Это действие нельзя отменить.">
+            <button type="submit" class="btn btn-danger btn-small">Удалить объект полностью</button>
+          </form>
+        </section>
+      <% }); %>
+    </div>
+
+    <section class="admin-card admin-card--new">
+      <h3 class="admin-new-title">+ Добавить объект в портфолио</h3>
+      <form method="POST" action="/admin/portfolio" enctype="multipart/form-data" class="admin-upload-form">
+        <label>Название *
+          <input type="text" name="title" placeholder="Например, Дом в пос. Лесной" required>
+        </label>
+        <div class="admin-form-grid">
+          <label>Стоимость
+            <input type="text" name="price" placeholder="6 800 000 ₽">
+          </label>
+          <label>Адрес для Google Карты
+            <input type="text" name="address" placeholder="Адрес или координаты">
+          </label>
+        </div>
+        <label>Описание
+          <textarea name="description" rows="4" placeholder="Что построили, сроки, особенности объекта"></textarea>
+        </label>
+        <label>Фотографии <span class="field-hint">(можно выбрать сразу несколько; первая станет обложкой)</span>
+          <input type="file" name="photos" accept="image/*" multiple>
+        </label>
+        <div class="admin-form-actions">
+          <button type="submit" class="btn btn-accent btn-small">Добавить объект</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script src="/js/confirm-delete.js"></script>
+  <script src="/js/admin-house-pager.js"></script>
+</body>
+</html>

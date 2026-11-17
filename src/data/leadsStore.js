@@ -30,13 +30,16 @@ function saveLeads(leads) {
 // Новая заявка всегда попадает в список со статусом "new" — по умолчанию.
 // Телефон и e-mail оба необязательны по отдельности, но хотя бы одно из
 // полей должно быть заполнено — это проверяется до вызова addLead.
-function addLead({ name, phone, email }) {
+// details — необязательное описание контекста заявки (например, конфигурация
+// из калькулятора стоимости).
+function addLead({ name, phone, email, details }) {
   const leads = getLeads();
   const lead = {
     id: crypto.randomUUID(),
     name,
     phone: phone || '',
     email: email || '',
+    details: details || '',
     status: 'new',
     comment: '',
     createdAt: new Date().toISOString(),

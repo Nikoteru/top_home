@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка — калькулятор</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'calculator', newRequestsCount }) %>
+  <%- include('../partials/calc-icons', { icons }) %>
+  <%
+    var calc = content.calculator || { title: '', intro: '', note: '', area: { min: 60, max: 400, step: 5, default: 120 }, blocks: [] };
+    var iconKeys = Object.keys(icons);
+  %>
+
+  <main class="container admin-main">
+    <% if (saved) { %>
+      <div class="alert alert-success">Изменения сохранены.</div>
+    <% } %>
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
+    <% } %>
+
+    <div class="admin-section-header">
+      <h2 class="admin-section-title">Калькулятор стоимости</h2>
+      <a href="/calculator" target="_blank" class="btn btn-outline btn-small">Открыть на сайте ↗</a>
+    </div>
+
+    <section class="admin-card calc-admin-help">
+      <strong>Как считается цена:</strong>
+      площадь × сумма цен «за м²» × коэффициенты + фиксированные суммы.
+      <ul>
+        <li><b>за м²</b> — умножается на площадь (например, стены 14 000 ₽/м²);</li>
+        <li><b>фиксированная сумма</b> — прибавляется один раз (например, септик 280 000 ₽);</li>
+        <li><b>коэффициент</b> — умножает всю стоимость «за м²» (например, 2 этажа = 0.9, т.е. −10%; 1 = без изменений).</li>
+      </ul>
+    </section>
+
+    <h3 class="calc-admin-subtitle">Общие настройки</h3>
+    <section class="admin-card">
+      <form method="POST" action="/admin/calculator/settings" class="admin-upload-form">
+        <label>Заголовок страницы
+          <input type="text" name="title" value="<%= calc.title %>" required>
+        </label>
+        <label>Подзаголовок
+          <textarea name="intro" rows="2"><%= calc.intro %></textarea>
+        </label>
+        <label>Примечание под итогом <span class="field-hint">(мелким шрифтом)</span>
+          <textarea name="note" rows="2"><%= calc.note %></textarea>
+        </label>
+        <div class="admin-form-grid calc-admin-area">
+          <label>Площадь от, м²<input type="number" name="areaMin" value="<%= calc.area.min %>" min="1" required></label>
+          <label>Площадь до, м²<input type="number" name="areaMax" value="<%= calc.area.max %>" min="2" required></label>
+          <label>Шаг ползунка, м²<input type="number" name="areaStep" value="<%= calc.area.step %>" min="1" required></label>
+          <label>По умолчанию, м²<input type="number" name="areaDefault" value="<%= calc.area.default %>" min="1" required></label>
+        </div>
+        <div class="admin-form-actions">
+          <button type="submit" class="btn btn-accent btn-small">Сохранить настройки</button>
+        </div>
+      </form>
+    </section>
+
+    <h3 class="calc-admin-subtitle">Блоки выбора</h3>
+
+    <% calc.blocks.forEach(function(block, bi) { var options = block.options || []; %>
+      <section class="admin-card calc-admin-block" id="calc-block-<%= block.id %>">
+        <div class="calc-admin-block__head">
+          <span class="admin-stage__num"><%= bi + 1 %></span>
+          <h4><%= block.title %></h4>
+          <div class="admin-stage__toolbar">
+            <form method="POST" action="/admin/calculator/blocks/<%= block.id %>/move">
+              <input type="hidden" name="direction" value="up">
+              <button type="submit" class="btn btn-outline btn-small" <%= bi === 0 ? 'disabled' : '' %>>↑</button>
+            </form>
+            <form method="POST" action="/admin/calculator/blocks/<%= block.id %>/move">
+              <input type="hidden" name="direction" value="down">
+              <button type="submit" class="btn btn-outline btn-small" <%= bi === calc.blocks.length - 1 ? 'disabled' : '' %>>↓</button>
+            </form>
+            <form method="POST" action="/admin/calculator/blocks/<%= block.id %>/delete"
+                  data-confirm-delete="Удалить блок «<%= block.title %>» со всеми вариантами?">
+              <button type="submit" class="btn btn-danger btn-small">Удалить блок</button>
+            </form>
+          </div>
+        </div>
+
+        <form method="POST" action="/admin/calculator/blocks/<%= block.id %>" enctype="multipart/form-data" class="calc-admin-form">
+          <div class="calc-admin-block__meta">
+            <label class="calc-admin-field">Название блока
+              <input type="text" name="title" value="<%= block.title %>" required>
+            </label>
+            <label class="admin-checkbox calc-admin-check">
+              <input type="checkbox" name="multiple" value="1" <%= block.multiple ? 'checked' : '' %>>
+              Можно выбрать несколько вариантов
+            </label>
+          </div>
+
+          <div class="calc-admin-options">
+            <div class="calc-admin-row calc-admin-row--head">
+              <span>Иконка</span><span>Название и подсказка</span><span>Цена</span><span>Тип цены</span><span></span>
+            </div>
+            <% options.forEach(function(option, oi) { %>
+              <div class="calc-admin-row" data-icon-row>
+                <input type="hidden" name="options[<%= oi %>][id]" value="<%= option.id %>">
+                <div class="calc-admin-icon">
+                  <span class="calc-admin-icon__preview" data-icon-preview>
+                    <% if (option.image) { %>
+                      <img src="<%= option.image %>" alt="">
+                    <% } else { %>
+                      <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#ci-<%= icons[option.icon] ? option.icon : 'check' %>"/></svg>
+                    <% } %>
+                  </span>
+                  <div class="calc-admin-icon__controls">
+                    <select name="options[<%= oi %>][icon]" data-icon-select aria-label="Иконка">
+                      <% if (option.image) { %><option value="__custom" selected>Своя картинка</option><% } %>
+                      <% iconKeys.forEach(function(key) { %>
+                        <option value="<%= key %>" <%= !option.image && option.icon === key ? 'selected' : '' %>><%= icons[key].label %></option>
+                      <% }); %>
+                    </select>
+                    <label class="calc-admin-upload">или загрузить свою
+                      <input type="file" name="icon_<%= oi %>" accept="image/*" data-icon-file>
+                    </label>
+                  </div>
+                </div>
+                <div class="calc-admin-texts">
+                  <input type="text" name="options[<%= oi %>][title]" value="<%= option.title %>" placeholder="Название" required>
+                  <input type="text" name="options[<%= oi %>][hint]" value="<%= option.hint || '' %>" placeholder="Подсказка (необязательно)">
+                </div>
+                <input type="text" name="options[<%= oi %>][price]" value="<%= option.price %>" inputmode="decimal" aria-label="Цена">
+                <select name="options[<%= oi %>][unit]" aria-label="Тип цены">
+                  <% Object.keys(units).forEach(function(u) { %>
+                    <option value="<%= u %>" <%= option.unit === u ? 'selected' : '' %>><%= units[u] %></option>
+                  <% }); %>
+                </select>
+                <label class="calc-admin-remove" title="Удалить вариант при сохранении">
+                  <input type="checkbox" name="options[<%= oi %>][remove]" value="1"> удалить
+                </label>
+              </div>
+            <% }); %>
+
+            <div class="calc-admin-row calc-admin-row--new" data-icon-row>
+              <div class="calc-admin-icon">
+                <span class="calc-admin-icon__preview" data-icon-preview>
+                  <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#ci-check"/></svg>
+                </span>
+                <div class="calc-admin-icon__controls">
+                  <select name="newOption[icon]" data-icon-select aria-label="Иконка нового варианта">
+                    <% iconKeys.forEach(function(key) { %>
+                      <option value="<%= key %>" <%= key === 'check' ? 'selected' : '' %>><%= icons[key].label %></option>
+                    <% }); %>
+                  </select>
+                  <label class="calc-admin-upload">или загрузить свою
+                    <input type="file" name="icon_new" accept="image/*" data-icon-file>
+                  </label>
+                </div>
+              </div>
+              <div class="calc-admin-texts">
+                <input type="text" name="newOption[title]" placeholder="+ Новый вариант: название">
+                <input type="text" name="newOption[hint]" placeholder="Подсказка (необязательно)">
+              </div>
+              <input type="text" name="newOption[price]" placeholder="Цена" inputmode="decimal" aria-label="Цена нового варианта">
+              <select name="newOption[unit]" aria-label="Тип цены нового варианта">
+                <% Object.keys(units).forEach(function(u) { %>
+                  <option value="<%= u %>"><%= units[u] %></option>
+                <% }); %>
+              </select>
+              <span></span>
+            </div>
+          </div>
+
+          <div class="admin-form-actions">
+            <button type="submit" class="btn btn-accent btn-small">Сохранить блок «<%= block.title %>»</button>
+            <span class="field-hint">Чтобы добавить вариант — заполните последнюю строку и сохраните.</span>
+          </div>
+        </form>
+      </section>
+    <% }); %>
+
+    <section class="admin-card admin-card--new">
+      <h3 class="admin-new-title">+ Добавить блок</h3>
+      <form method="POST" action="/admin/calculator/blocks" class="admin-upload-form">
+        <label>Название блока *
+          <input type="text" name="title" placeholder="Например, Окна" required>
+        </label>
+        <label class="admin-checkbox">
+          <input type="checkbox" name="multiple" value="1"> Можно выбрать несколько вариантов
+        </label>
+        <div class="admin-form-actions">
+          <button type="submit" class="btn btn-accent btn-small">Добавить блок</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script src="/js/confirm-delete.js"></script>
+  <script>
+    // Живой предпросмотр иконки: при выборе из списка или загрузке файла.
+    document.querySelectorAll('[data-icon-row]').forEach(function (row) {
+      var preview = row.querySelector('[data-icon-preview]');
+      var select = row.querySelector('[data-icon-select]');
+      var file = row.querySelector('[data-icon-file]');
+      var svgNS = 'http://www.w3.org/2000/svg';
+
+      function showIcon(key) {
+        preview.innerHTML = '';
+        var svg = document.createElementNS(svgNS, 'svg');
+        ['fill:none', 'stroke:currentColor', 'stroke-width:2', 'stroke-linecap:round', 'stroke-linejoin:round'].forEach(function (pair) {
+          var kv = pair.split(':');
+          svg.setAttribute(kv[0], kv[1]);
+        });
+        var use = document.createElementNS(svgNS, 'use');
+        use.setAttribute('href', '#ci-' + key);
+        svg.appendChild(use);
+        preview.appendChild(svg);
+      }
+
+      select.addEventListener('change', function () {
+        if (select.value !== '__custom') {
+          showIcon(select.value);
+          if (file) file.value = '';
+        }
+      });
+      if (file) {
+        file.addEventListener('change', function () {
+          if (!file.files || !file.files[0]) return;
+          var img = document.createElement('img');
+          img.src = URL.createObjectURL(file.files[0]);
+          img.alt = '';
+          preview.innerHTML = '';
+          preview.appendChild(img);
+        });
+      }
+    });
+  </script>
+</body>
+</html>

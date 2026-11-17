@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Админка — управление сайтом</title>
+  <title>Админка — проекты</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body class="admin-body">
-  <%- include('../partials/admin-header', { active: 'dashboard', newRequestsCount }) %>
+  <%- include('../partials/admin-header', { active: 'houses', newRequestsCount }) %>
 
   <main class="container admin-main">
     <% if (saved) { %>
@@ -17,75 +17,9 @@
       <div class="alert alert-error"><%= error %></div>
     <% } %>
 
-    <section class="admin-card">
-      <h2>Hero-баннер (главный экран сайта)</h2>
-      <div class="admin-card__row">
-        <img class="admin-preview" src="<%= content.hero.image %>" alt="Hero">
-        <form method="POST" action="/admin/hero" enctype="multipart/form-data" class="admin-upload-form">
-          <label>Заголовок
-            <input type="text" name="title" value="<%= content.hero.title %>" required>
-          </label>
-          <label>Подзаголовок
-            <textarea name="subtitle" rows="2"><%= content.hero.subtitle %></textarea>
-          </label>
-          <label>Заменить изображение
-            <input type="file" name="image" accept="image/*">
-          </label>
-          <div class="admin-form-actions">
-            <button type="submit" class="btn btn-accent btn-small">Сохранить</button>
-          </div>
-        </form>
-      </div>
-    </section>
-
-    <h2 class="admin-section-title">Блок «5 причин выбрать одноэтажный дом»</h2>
-    <div class="admin-houses-grid">
-      <% content.advantages.forEach(function(adv) { %>
-        <section class="admin-card">
-          <div class="admin-card__row">
-            <img class="admin-preview admin-preview--house" src="<%= adv.image %>" alt="<%= adv.title %>">
-            <form method="POST" action="/admin/advantage/<%= adv.id %>" enctype="multipart/form-data" class="admin-upload-form">
-              <label>Заголовок
-                <input type="text" name="title" value="<%= adv.title %>" required>
-              </label>
-              <label>Текст
-                <textarea name="text" rows="3"><%= adv.text %></textarea>
-              </label>
-              <label>Заменить изображение
-                <input type="file" name="image" accept="image/*">
-              </label>
-              <div class="admin-form-actions">
-                <button type="submit" class="btn btn-accent btn-small">Сохранить</button>
-              </div>
-            </form>
-          </div>
-        </section>
-      <% }); %>
-    </div>
-
-    <h2 class="admin-section-title">Контактная информация</h2>
-    <section class="admin-card">
-      <form method="POST" action="/admin/contacts" class="admin-upload-form admin-contacts-form">
-        <div class="admin-form-grid admin-form-grid--3">
-          <label>Телефон
-            <input type="text" name="phone" value="<%= content.contacts.phone %>" required>
-          </label>
-          <label>E-mail
-            <input type="email" name="email" value="<%= content.contacts.email %>">
-          </label>
-          <label>Адрес
-            <input type="text" name="address" value="<%= content.contacts.address %>">
-          </label>
-        </div>
-        <div class="admin-form-actions">
-          <button type="submit" class="btn btn-accent btn-small">Сохранить контакты</button>
-        </div>
-      </form>
-    </section>
-
     <div class="admin-section-header">
       <h2 class="admin-section-title">Карточки домов</h2>
-      <span class="admin-section-count"><%= content.houses.length %> шт.</span>
+      <span class="admin-section-count"><%= content.houses.length %> шт., на главной — <%= content.houses.filter(function(h) { return h.showOnHome !== false; }).length %></span>
     </div>
 
     <% if (content.houses.length > 0) { %>
@@ -94,6 +28,7 @@
         <div class="admin-pager__list" id="housePagerList">
           <% content.houses.forEach(function(house, i) { %>
             <button type="button" class="admin-pager__item <%= i === 0 ? 'is-active' : '' %>" data-house-id="<%= house.id %>">
+              <% if (house.showOnHome !== false) { %><span class="admin-home-mark" title="Показывается на главной">★</span><% } %>
               <%= house.title %>
             </button>
           <% }); %>
@@ -128,6 +63,11 @@
               </label>
               <label>Характеристики <span class="field-hint">(по одной на строку, формат «Метка: Значение»)</span>
                 <textarea name="specs" rows="6" class="specs-textarea" placeholder="Спальни: 3&#10;Санузлы: 2&#10;Материал стен: клеёный брус"><%= (house.specs || []).map(function(s) { return s.label + ': ' + s.value; }).join('\n') %></textarea>
+              </label>
+              <input type="hidden" name="showOnHomeField" value="1">
+              <label class="admin-checkbox">
+                <input type="checkbox" name="showOnHome" value="1" <%= house.showOnHome !== false ? 'checked' : '' %>>
+                Показывать на главной странице <span class="field-hint">(без галочки — только во вкладке «Все проекты»)</span>
               </label>
               <label>Заменить главное изображение
                 <input type="file" name="image" accept="image/*">
@@ -194,6 +134,10 @@
           </label>
           <label>Характеристики <span class="field-hint">(по одной на строку, формат «Метка: Значение»)</span>
             <textarea name="specs" rows="6" class="specs-textarea" placeholder="Спальни: 3&#10;Санузлы: 2&#10;Материал стен: клеёный брус"></textarea>
+          </label>
+          <label class="admin-checkbox">
+            <input type="checkbox" name="showOnHome" value="1">
+            Показывать на главной странице <span class="field-hint">(без галочки — только во вкладке «Все проекты»)</span>
           </label>
           <label>Изображение
             <input type="file" name="image" accept="image/*">

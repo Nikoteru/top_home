@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= calc.title %> — <%= content.hero.title %></title>
+  <meta name="description" content="<%= calc.intro %>">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <%- include('partials/header') %>
+  <%- include('partials/calc-icons', { icons }) %>
+  <%
+    function rub(v) { return Math.round(v).toLocaleString('ru-RU').replace(/ /g, ' ') + ' ₽'; }
+    function priceLabel(o) {
+      var p = Number(o.price) || 0;
+      if (o.unit === 'm2') return p ? rub(p) + '/м²' : 'входит в цену';
+      if (o.unit === 'fixed') return '+' + rub(p);
+      if (p === 1) return 'базовая цена';
+      var pct = Math.round((p - 1) * 100);
+      return (pct > 0 ? '+' : '−') + Math.abs(pct) + '% к цене за м²';
+    }
+    var area = calc.area || { min: 60, max: 400, step: 5, default: 120 };
+  %>
+
+  <section class="container projects-page calc-page">
+    <nav class="breadcrumb">
+      <a href="/">Главная</a> <span>/</span> <span>Калькулятор</span>
+    </nav>
+
+    <div class="projects-head">
+      <div>
+        <h1><%= calc.title %></h1>
+        <% if (calc.intro) { %><p class="projects-count"><%= calc.intro %></p><% } %>
+      </div>
+    </div>
+
+    <div class="calc-layout">
+      <form class="calc-form" id="calcForm" onsubmit="return false">
+        <section class="calc-block">
+          <h2 class="calc-block__title"><span class="calc-block__num">1</span> Площадь дома</h2>
+          <div class="calc-area">
+            <input type="range" id="calcAreaRange" min="<%= area.min %>" max="<%= area.max %>" step="<%= area.step %>" value="<%= area.default %>" aria-label="Площадь дома, м²">
+            <label class="calc-area__value">
+              <input type="number" id="calcAreaInput" min="<%= area.min %>" max="<%= area.max %>" step="<%= area.step %>" value="<%= area.default %>" inputmode="numeric">
+              <span>м²</span>
+            </label>
+          </div>
+          <div class="calc-area__scale"><span><%= area.min %> м²</span><span><%= area.max %> м²</span></div>
+        </section>
+
+        <% calc.blocks.forEach(function(block, bi) { if (!block.options || !block.options.length) return; %>
+          <section class="calc-block">
+            <h2 class="calc-block__title">
+              <span class="calc-block__num"><%= bi + 2 %></span> <%= block.title %>
+              <% if (block.multiple) { %><span class="calc-block__hint">можно выбрать несколько</span><% } %>
+            </h2>
+            <div class="calc-options">
+              <% block.options.forEach(function(option, oi) { %>
+                <label class="calc-option">
+                  <input class="calc-option__input" type="<%= block.multiple ? 'checkbox' : 'radio' %>"
+                         name="block-<%= block.id %>" value="<%= option.id %>" data-block-id="<%= block.id %>"
+                         <%= !block.multiple && oi === 0 ? 'checked' : '' %>>
+                  <span class="calc-option__card">
+                    <%- include('partials/calc-option-icon', { option, icons }) %>
+                    <span class="calc-option__title"><%= option.title %></span>
+                    <% if (option.hint) { %><span class="calc-option__hint"><%= option.hint %></span><% } %>
+                    <span class="calc-option__price"><%= priceLabel(option) %></span>
+                  </span>
+                </label>
+              <% }); %>
+            </div>
+          </section>
+        <% }); %>
+      </form>
+
+      <aside class="calc-summary" id="calcSummary">
+        <div class="calc-summary__card">
+          <span class="calc-summary__label">Ориентировочная стоимость</span>
+          <div class="calc-summary__total" id="calcTotal"><%= rub(initial.total) %></div>
+          <div class="calc-summary__per" id="calcPerM2">≈ <%= rub(initial.perM2) %> за м² · <span id="calcAreaLabel"><%= initial.area %></span> м²</div>
+          <ul class="calc-summary__lines" id="calcLines">
+            <% initial.lines.forEach(function(l) { %>
+              <li><span><%= l.blockTitle %>: <%= l.optionTitle %></span><b><%= l.unit === 'coef' ? '' : rub(l.amount) %></b></li>
+            <% }); %>
+          </ul>
+          <a href="#form" class="btn btn-accent calc-summary__btn">Получить точный расчёт</a>
+          <% if (calc.note) { %><p class="calc-summary__note"><%= calc.note %></p><% } %>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <div class="calc-mobilebar" id="calcMobileBar">
+    <div>
+      <span class="calc-mobilebar__label">Итого</span>
+      <b id="calcMobileTotal"><%= rub(initial.total) %></b>
+    </div>
+    <a href="#form" class="btn btn-accent btn-small">Получить расчёт</a>
+  </div>
+
+  <script type="application/json" id="calcConfig"><%- JSON.stringify({ area: calc.area, blocks: calc.blocks.map(function(b) { return { id: b.id, title: b.title, multiple: !!b.multiple, options: (b.options || []).map(function(o) { return { id: o.id, title: o.title, price: o.price, unit: o.unit }; }) }; }) }).replace(/</g, '\\u003c') %></script>
+
+  <%- include('partials/lead-cta', {
+    ctaTitle: 'Получите точную смету',
+    ctaText: 'Оставьте контакты — инженер проверит выбранную конфигурацию, учтёт ваш участок и пришлёт подробный расчёт. Выбранные параметры придут вместе с заявкой.',
+    returnTo: '/calculator',
+    withCalc: true,
+  }) %>
+
+  <%- include('partials/footer') %>
+
+  <script src="/js/main.js"></script>
+  <script src="/js/calculator.js"></script>
+  <script src="/js/form-validation.js"></script>
+</body>
+</html>

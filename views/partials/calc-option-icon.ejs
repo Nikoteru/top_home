@@ -1,0 +1,6 @@
+<%# Иконка варианта: своя загруженная картинка или иконка из встроенного набора %>
+<% if (option.image) { %>
+  <img class="calc-icon calc-icon--image" src="<%= option.image %>" alt="" loading="lazy">
+<% } else { %>
+  <svg class="calc-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ci-<%= icons[option.icon] ? option.icon : 'check' %>"/></svg>
+<% } %>

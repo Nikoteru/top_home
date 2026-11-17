@@ -1,0 +1,6 @@
+<%# Спрайт встроенных иконок калькулятора: <svg><use href="#ci-КЛЮЧ"/></svg> %>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <% Object.keys(icons).forEach(function(key) { %>
+    <symbol id="ci-<%= key %>" viewBox="0 0 48 48"><%- icons[key].body %></symbol>
+  <% }); %>
+</svg>

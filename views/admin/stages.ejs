@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка — этапы стройки</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'stages', newRequestsCount }) %>
+  <% var stages = content.stages || []; %>
+
+  <main class="container admin-main">
+    <% if (saved) { %>
+      <div class="alert alert-success">Изменения сохранены.</div>
+    <% } %>
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
+    <% } %>
+
+    <div class="admin-section-header">
+      <h2 class="admin-section-title">Этапы стройки</h2>
+      <span class="admin-section-count"><%= stages.length %> этапов, с фото — <%= stages.filter(function(s) { return (s.photos || []).length > 0; }).length %></span>
+    </div>
+    <p class="field-hint admin-stages-hint">Этапы показываются на сайте в этом порядке. Нажмите на этап, чтобы изменить его и загрузить фото.
+      <a href="/stages" target="_blank" class="admin-map-check">Открыть на сайте ↗</a></p>
+
+    <div class="admin-stages" id="adminStages">
+      <% stages.forEach(function(stage, i) { var photos = stage.photos || []; %>
+        <details class="admin-stage" id="stage-<%= stage.id %>" data-stage-id="<%= stage.id %>">
+          <summary class="admin-stage__summary">
+            <span class="admin-stage__num"><%= i + 1 %></span>
+            <span class="admin-stage__title"><%= stage.title %></span>
+            <span class="admin-stage__count <%= photos.length ? '' : 'is-empty' %>"><%= photos.length ? photos.length + ' фото' : 'нет фото' %></span>
+          </summary>
+
+          <div class="admin-stage__body">
+            <div class="admin-stage__toolbar">
+              <form method="POST" action="/admin/stages/<%= stage.id %>/move">
+                <input type="hidden" name="direction" value="up">
+                <button type="submit" class="btn btn-outline btn-small" <%= i === 0 ? 'disabled' : '' %>>↑ Выше</button>
+              </form>
+              <form method="POST" action="/admin/stages/<%= stage.id %>/move">
+                <input type="hidden" name="direction" value="down">
+                <button type="submit" class="btn btn-outline btn-small" <%= i === stages.length - 1 ? 'disabled' : '' %>>↓ Ниже</button>
+              </form>
+            </div>
+
+            <form method="POST" action="/admin/stages/<%= stage.id %>" class="admin-upload-form">
+              <label>Название этапа
+                <input type="text" name="title" value="<%= stage.title %>" required>
+              </label>
+              <label>Описание <span class="field-hint">(необязательно — коротко, что делается на этапе)</span>
+                <textarea name="description" rows="3"><%= stage.description || '' %></textarea>
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="btn btn-accent btn-small">Сохранить</button>
+              </div>
+            </form>
+
+            <div class="admin-gallery-section">
+              <h4>Фотографии этапа <span class="field-hint">(<%= photos.length %> шт.)</span></h4>
+              <% if (photos.length > 0) { %>
+                <div class="admin-gallery-grid">
+                  <% photos.forEach(function(photo, pi) { %>
+                    <div class="admin-gallery-item">
+                      <img src="<%= photo %>" alt="Фото <%= pi + 1 %>" loading="lazy">
+                      <form method="POST" action="/admin/stages/<%= stage.id %>/photos/<%= pi %>/delete"
+                            data-confirm-delete="Удалить это фото?">
+                        <button type="submit" class="btn btn-danger btn-small">Удалить</button>
+                      </form>
+                    </div>
+                  <% }); %>
+                </div>
+              <% } else { %>
+                <p class="admin-empty admin-empty--small">Фотографий пока нет.</p>
+              <% } %>
+              <form method="POST" action="/admin/stages/<%= stage.id %>/photos" enctype="multipart/form-data" class="admin-gallery-upload">
+                <label>Добавить фото <span class="field-hint">(можно выбрать сразу несколько, до 30 за раз)</span>
+                  <input type="file" name="photos" accept="image/*" multiple required>
+                </label>
+                <button type="submit" class="btn btn-outline btn-small">Загрузить</button>
+              </form>
+            </div>
+
+            <form method="POST" action="/admin/stages/<%= stage.id %>/delete"
+                  class="admin-delete-form"
+                  data-confirm-delete="Удалить этап «<%= stage.title %>» вместе со всеми фото? Это действие нельзя отменить.">
+              <button type="submit" class="btn btn-danger btn-small">Удалить этап</button>
+            </form>
+          </div>
+        </details>
+      <% }); %>
+    </div>
+
+    <section class="admin-card admin-card--new">
+      <h3 class="admin-new-title">+ Добавить этап</h3>
+      <form method="POST" action="/admin/stages" class="admin-upload-form">
+        <label>Название этапа *
+          <input type="text" name="title" placeholder="Например, Благоустройство участка" required>
+        </label>
+        <div class="admin-form-actions">
+          <button type="submit" class="btn btn-accent btn-small">Добавить в конец ленты</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script src="/js/confirm-delete.js"></script>
+  <script>
+    // После сохранения раскрываем тот этап, с которым работали (?open=ID).
+    (function () {
+      var id = new URLSearchParams(window.location.search).get('open');
+      if (!id) return;
+      var el = document.querySelector('.admin-stage[data-stage-id="' + CSS.escape(id) + '"]');
+      if (!el) return;
+      el.open = true;
+      el.scrollIntoView({ block: 'start' });
+    })();
+  </script>
+</body>
+</html>

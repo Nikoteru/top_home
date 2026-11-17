@@ -40,7 +40,12 @@
             <% leads.forEach(function(lead) { %>
               <tr>
                 <td><%= new Date(lead.createdAt).toLocaleString('ru-RU') %></td>
-                <td><%= lead.name %></td>
+                <td>
+                  <%= lead.name %>
+                  <% if (lead.details) { %>
+                    <div class="lead-details"><%= lead.details %></div>
+                  <% } %>
+                </td>
                 <td class="leads-contacts-cell">
                   <% if (lead.phone) { %>
                     <a href="tel:<%= lead.phone.replace(/[^+\d]/g, '') %>"><%= lead.phone %></a>

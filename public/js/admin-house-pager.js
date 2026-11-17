@@ -10,7 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const counter = document.getElementById('housePagerCounter');
   if (!pages.length) return;
 
-  const STORAGE_KEY = 'adminActiveHouseId';
+  // Одна и та же листалка используется на страницах «Проекты» и «Портфолио» —
+  // у каждой свой ключ, чтобы выбранные карточки не путались.
+  const STORAGE_KEY = document.getElementById('housePages').dataset.storageKey || 'adminActiveHouseId';
   let currentIndex = 0;
 
   function getStoredId() {
@@ -50,7 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (prevBtn) prevBtn.addEventListener('click', () => showPage(currentIndex - 1));
   if (nextBtn) nextBtn.addEventListener('click', () => showPage(currentIndex + 1));
 
-  const storedId = getStoredId();
+  // ?open=ID в адресе (например, сразу после создания объекта) важнее запомненного.
+  const openId = new URLSearchParams(window.location.search).get('open');
+  const storedId = openId || getStoredId();
   const restoredIndex = storedId ? pages.findIndex((p) => p.dataset.houseId === storedId) : -1;
   showPage(restoredIndex !== -1 ? restoredIndex : 0);
 });

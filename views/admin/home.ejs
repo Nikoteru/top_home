@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка — главная страница</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'home', newRequestsCount }) %>
+
+  <main class="container admin-main">
+    <% if (saved) { %>
+      <div class="alert alert-success">Изменения сохранены.</div>
+    <% } %>
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
+    <% } %>
+
+    <section class="admin-card">
+      <h2>Hero-баннер (главный экран сайта)</h2>
+      <div class="admin-card__row">
+        <img class="admin-preview" src="<%= content.hero.image %>" alt="Hero">
+        <form method="POST" action="/admin/hero" enctype="multipart/form-data" class="admin-upload-form">
+          <label>Заголовок
+            <input type="text" name="title" value="<%= content.hero.title %>" required>
+          </label>
+          <label>Подзаголовок
+            <textarea name="subtitle" rows="2"><%= content.hero.subtitle %></textarea>
+          </label>
+          <label>Заменить изображение
+            <input type="file" name="image" accept="image/*">
+          </label>
+          <div class="admin-form-actions">
+            <button type="submit" class="btn btn-accent btn-small">Сохранить</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <h2 class="admin-section-title">Блок «5 причин выбрать одноэтажный дом»</h2>
+    <div class="admin-houses-grid">
+      <% content.advantages.forEach(function(adv) { %>
+        <section class="admin-card">
+          <div class="admin-card__row">
+            <img class="admin-preview admin-preview--house" src="<%= adv.image %>" alt="<%= adv.title %>">
+            <form method="POST" action="/admin/advantage/<%= adv.id %>" enctype="multipart/form-data" class="admin-upload-form">
+              <label>Заголовок
+                <input type="text" name="title" value="<%= adv.title %>" required>
+              </label>
+              <label>Текст
+                <textarea name="text" rows="3"><%= adv.text %></textarea>
+              </label>
+              <label>Заменить изображение
+                <input type="file" name="image" accept="image/*">
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="btn btn-accent btn-small">Сохранить</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      <% }); %>
+    </div>
+  </main>
+</body>
+</html>

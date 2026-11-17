@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Этапы стройки — <%= content.hero.title %></title>
+  <meta name="description" content="Как мы строим дом: все этапы от подготовки участка до наружных сетей с фотографиями.">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <section class="container projects-page">
+    <nav class="breadcrumb">
+      <a href="/">Главная</a> <span>/</span> <span>Этапы стройки</span>
+    </nav>
+
+    <div class="projects-head">
+      <div>
+        <h1>Этапы стройки</h1>
+        <p class="projects-count">Как мы строим дом — шаг за шагом, от подготовки участка до наружных сетей.</p>
+      </div>
+    </div>
+
+    <% if (stages.length === 0) { %>
+      <p class="projects-empty">Скоро здесь появятся этапы строительства.</p>
+    <% } else { %>
+      <div class="stages-layout">
+        <ol class="timeline" aria-label="Этапы строительства">
+          <% stages.forEach(function(stage, i) { var count = (stage.photos || []).length; %>
+            <li class="timeline__item">
+              <button type="button" class="timeline__btn <%= i === 0 ? 'is-active' : '' %>"
+                      data-stage-id="<%= stage.id %>" aria-controls="stage-panel-<%= stage.id %>" aria-pressed="<%= i === 0 %>">
+                <span class="timeline__dot"><%= i + 1 %></span>
+                <span class="timeline__title"><%= stage.title %></span>
+                <% if (count > 0) { %><span class="timeline__badge"><%= count %> фото</span><% } %>
+              </button>
+            </li>
+          <% }); %>
+        </ol>
+
+        <div class="stage-panel" id="stagePanel" aria-live="polite">
+          <% stages.forEach(function(stage, i) { var photos = stage.photos || []; %>
+            <section class="stage-panel__item" id="stage-panel-<%= stage.id %>" data-stage-id="<%= stage.id %>" <%= i !== 0 ? 'hidden' : '' %>>
+              <span class="stage-panel__step">Этап <%= i + 1 %> из <%= stages.length %></span>
+              <h2 class="stage-panel__title"><%= stage.title %></h2>
+              <% if (stage.description) { %>
+                <p class="stage-panel__text"><%= stage.description %></p>
+              <% } %>
+              <% if (photos.length > 0) { %>
+                <div class="stage-panel__photos" data-stage-gallery="<%= JSON.stringify(photos) %>">
+                  <% photos.forEach(function(photo, pi) { %>
+                    <button type="button" class="stage-panel__photo" data-index="<%= pi %>" aria-label="Увеличить фото <%= pi + 1 %>">
+                      <img src="<%= photo %>" alt="<%= stage.title %> — фото <%= pi + 1 %>" loading="lazy">
+                    </button>
+                  <% }); %>
+                </div>
+              <% } else if (!stage.description) { %>
+                <p class="stage-panel__empty">Фотографии этого этапа скоро появятся.</p>
+              <% } %>
+              <div class="stage-panel__nav">
+                <button type="button" class="btn btn-outline btn-small" data-stage-go="<%= i - 1 %>" <%= i === 0 ? 'hidden' : '' %>>← <%= i > 0 ? stages[i - 1].title : '' %></button>
+                <button type="button" class="btn btn-accent btn-small" data-stage-go="<%= i + 1 %>" <%= i === stages.length - 1 ? 'hidden' : '' %>><%= i < stages.length - 1 ? stages[i + 1].title : '' %> →</button>
+              </div>
+            </section>
+          <% }); %>
+        </div>
+      </div>
+    <% } %>
+  </section>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <button type="button" class="lightbox-close" id="lightboxClose" aria-label="Закрыть">✕</button>
+    <button type="button" class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Предыдущее фото">‹</button>
+    <img class="lightbox-image" id="lightboxImage" src="" alt="">
+    <button type="button" class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Следующее фото">›</button>
+    <div class="lightbox-counter" id="lightboxCounter"></div>
+  </div>
+
+  <%- include('partials/lead-cta', {
+    ctaTitle: 'Построим ваш дом так же',
+    ctaText: 'Оставьте заявку — расскажем о сроках каждого этапа и рассчитаем стоимость под ваш участок.',
+    returnTo: '/stages',
+  }) %>
+
+  <%- include('partials/footer') %>
+
+  <script src="/js/main.js"></script>
+  <script src="/js/stages.js"></script>
+  <script src="/js/form-validation.js"></script>
+</body>
+</html>

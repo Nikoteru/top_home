@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка — контакты</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'contacts', newRequestsCount }) %>
+
+  <main class="container admin-main">
+    <% if (saved) { %>
+      <div class="alert alert-success">Изменения сохранены.</div>
+    <% } %>
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
+    <% } %>
+
+    <h2 class="admin-section-title">Контактная информация</h2>
+    <section class="admin-card">
+      <form method="POST" action="/admin/contacts" class="admin-upload-form admin-contacts-form">
+        <div class="admin-form-grid admin-form-grid--3">
+          <label>Телефон
+            <input type="text" name="phone" value="<%= content.contacts.phone %>" required>
+          </label>
+          <label>E-mail
+            <input type="email" name="email" value="<%= content.contacts.email %>">
+          </label>
+          <label>Адрес
+            <input type="text" name="address" value="<%= content.contacts.address %>">
+          </label>
+        </div>
+        <div class="admin-form-actions">
+          <button type="submit" class="btn btn-accent btn-small">Сохранить контакты</button>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

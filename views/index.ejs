@@ -46,7 +46,7 @@
     <div class="container">
       <h2 class="section-title">Топ‑5 проектов</h2>
       <div class="houses-grid">
-        <% content.houses.forEach(function(house) { %>
+        <% homeHouses.forEach(function(house) { %>
           <article class="house-card">
             <a href="/houses/<%= house.id %>" class="house-card__image" style="background-image:url('<%= house.image %>')" aria-label="<%= house.title %>"></a>
             <div class="house-card__body">
@@ -60,6 +60,9 @@
             </div>
           </article>
         <% }); %>
+      </div>
+      <div class="houses-more">
+        <a href="/projects" class="btn btn-accent">Смотреть все проекты</a>
       </div>
     </div>
   </section>

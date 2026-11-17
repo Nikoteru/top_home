@@ -2,7 +2,12 @@
   <div class="container admin-header-inner">
     <span class="logo">Админка</span>
     <nav class="admin-nav">
-      <a href="/admin" class="<%= active === 'dashboard' ? 'is-active' : '' %>">Контент сайта</a>
+      <a href="/admin/houses" class="<%= active === 'houses' ? 'is-active' : '' %>">Проекты</a>
+      <a href="/admin/portfolio" class="<%= active === 'portfolio' ? 'is-active' : '' %>">Портфолио</a>
+      <a href="/admin/stages" class="<%= active === 'stages' ? 'is-active' : '' %>">Этапы стройки</a>
+      <a href="/admin/calculator" class="<%= active === 'calculator' ? 'is-active' : '' %>">Калькулятор</a>
+      <a href="/admin/home" class="<%= active === 'home' ? 'is-active' : '' %>">Главная страница</a>
+      <a href="/admin/contacts" class="<%= active === 'contacts' ? 'is-active' : '' %>">Контакты</a>
       <a href="/admin/requests" class="<%= active === 'requests' ? 'is-active' : '' %>">
         Обращения
         <% if (newRequestsCount > 0) { %>
