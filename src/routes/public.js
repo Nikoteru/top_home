@@ -3,22 +3,17 @@ const rateLimit = require('express-rate-limit');
 const { getContent } = require('../data/store');
 const { addLead } = require('../data/leadsStore');
 const { isValidRuPhone, isValidEmail, formatRuPhone } = require('../utils/validate');
-const { calculate, describe, UNITS } = require('../utils/calc');
+const { getAreaLimits, normalizeProjectFilters, matchProjects, describeProjectFilters } = require('../utils/projectMatcher');
 const { ICONS } = require('../data/calcIcons');
+const { getHouseSpecs } = require('../utils/houseParameters');
 
-// Конфигурация из калькулятора приходит скрытым полем calc (JSON с площадью
-// и id выбранных вариантов). Цену пересчитываем по текущим настройкам на
-// сервере — браузеру не доверяем. Любой мусор просто игнорируем.
+// В заявку попадают диапазон площади и существующие варианты параметров.
 function calcDetailsFromRequest(raw, content) {
   if (!raw || typeof raw !== 'string' || raw.length > 4000 || !content.calculator) return '';
   try {
     const data = JSON.parse(raw);
     if (!data || typeof data !== 'object') return '';
-    const selection = {};
-    Object.entries(data.selection || {}).forEach(([blockId, ids]) => {
-      if (Array.isArray(ids)) selection[blockId] = ids.slice(0, 50).map(String);
-    });
-    return describe(calculate(content.calculator, data.area, selection));
+    return describeProjectFilters(content.calculator, data);
   } catch (e) {
     return '';
   }
@@ -124,21 +119,40 @@ router.get('/portfolio/:id', (req, res) => {
   });
 });
 
-// Калькулятор стоимости: настройки (блоки, варианты, цены, иконки) — в админке.
+function projectFiltersFromQuery(calc, query) {
+  return normalizeProjectFilters(calc, {
+    areaMin: query.areaMin,
+    areaMax: query.areaMax,
+    selection: Object.fromEntries((calc.blocks || []).map((block) => [block.id, query[`block-${block.id}`]])),
+  });
+}
+
+// Подбор по тем же характеристикам, которые заданы в карточках проектов.
 router.get('/calculator', (req, res) => {
   const content = getContent();
   const calc = content.calculator;
   if (!calc) return res.status(404).render('404', { content });
+  const filters = projectFiltersFromQuery(calc, req.query);
   res.render('calculator', {
     content,
     calc,
     icons: ICONS,
-    units: UNITS,
-    initial: calculate(calc, calc.area && calc.area.default, {}),
+    area: getAreaLimits(calc),
+    filters,
+    matches: matchProjects(content.houses, calc, filters),
     activePage: 'calculator',
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
   });
+});
+
+// Тот же серверный подбор для обновления результатов без перезагрузки.
+router.get('/calculator/matches', (req, res) => {
+  const content = getContent();
+  if (!content.calculator) return res.sendStatus(404);
+  const filters = projectFiltersFromQuery(content.calculator, req.query);
+  res.set('Cache-Control', 'no-store');
+  res.render('partials/project-matches', { matches: matchProjects(content.houses, content.calculator, filters) });
 });
 
 // Этапы стройки: вертикальная лента от подготовки участка до наружных сетей.
@@ -164,6 +178,7 @@ router.get('/houses/:id', (req, res) => {
     content,
     house,
     otherHouses,
+    specs: getHouseSpecs(house, content.calculator),
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
   });

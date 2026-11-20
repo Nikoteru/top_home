@@ -1,122 +1,152 @@
-// Калькулятор стоимости дома: мгновенный пересчёт на клиенте.
-// Формула совпадает с серверной (src/utils/calc.js):
-//   итого = площадь × Σ(цены «за м²») × Π(коэффициенты) + Σ(фикс. суммы)
+// Характеристики и диапазон отправляются в общий серверный подбор.
 document.addEventListener('DOMContentLoaded', () => {
   const configEl = document.getElementById('calcConfig');
   if (!configEl) return;
-  const config = JSON.parse(configEl.textContent);
-
+  const { area: limits, filters: initial } = JSON.parse(configEl.textContent);
   const form = document.getElementById('calcForm');
-  const range = document.getElementById('calcAreaRange');
-  const areaInput = document.getElementById('calcAreaInput');
-  const totalEl = document.getElementById('calcTotal');
-  const perM2El = document.getElementById('calcPerM2');
-  const linesEl = document.getElementById('calcLines');
-  const mobileTotalEl = document.getElementById('calcMobileTotal');
+  const minInput = document.getElementById('calcAreaMin');
+  const maxInput = document.getElementById('calcAreaMax');
+  const minRange = document.getElementById('calcAreaMinRange');
+  const maxRange = document.getElementById('calcAreaMaxRange');
+  const fill = document.getElementById('calcAreaFill');
+  const results = document.getElementById('calcMatchResults');
+  const status = document.getElementById('calcRequestStatus');
+  const mobileCount = document.getElementById('calcMobileCount');
   const calcField = document.getElementById('calcField');
+  let areaMin = initial.areaMin;
+  let areaMax = initial.areaMax;
+  let timer;
+  let controller;
+  let generation = 0;
 
-  const areaCfg = config.area || { min: 1, max: 10000, step: 1, default: 100 };
-
-  const num = (v, fallback = 0) => {
-    const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.'));
-    return Number.isFinite(n) ? n : fallback;
-  };
-  const rub = (v) => `${Math.round(v).toLocaleString('ru-RU')} ₽`;
-  const clampArea = (v) => Math.min(areaCfg.max, Math.max(areaCfg.min, Math.round(num(v, areaCfg.default))));
-
-  function getSelection() {
+  function filters() {
     const selection = {};
     form.querySelectorAll('.calc-option__input:checked').forEach((input) => {
-      const blockId = input.dataset.blockId;
-      (selection[blockId] = selection[blockId] || []).push(input.value);
+      if (input.value) (selection[input.dataset.blockId] ||= []).push(input.value);
     });
-    return selection;
+    return { areaMin, areaMax, selection };
   }
 
-  function calculate(area, selection) {
-    const chosen = [];
-    config.blocks.forEach((block) => {
-      const ids = selection[block.id] || [];
-      let picked = block.options.filter((o) => ids.includes(String(o.id)));
-      if (!block.multiple) picked = picked.length ? [picked[0]] : block.options.slice(0, 1);
-      picked.forEach((option) => chosen.push({ block, option }));
-    });
-
-    const coef = chosen
-      .filter((c) => c.option.unit === 'coef')
-      .reduce((acc, c) => acc * (num(c.option.price, 1) || 1), 1);
-
-    let total = 0;
-    const lines = chosen.map(({ block, option }) => {
-      const price = num(option.price);
-      let amount = 0;
-      if (option.unit === 'm2') amount = area * price * coef;
-      else if (option.unit === 'fixed') amount = price;
-      total += amount;
-      return { block: block.title, option: option.title, unit: option.unit, amount };
-    });
-
-    total = Math.round(total / 1000) * 1000;
-    return { total, perM2: area ? Math.round(total / area) : 0, lines };
+  function queryFor(value) {
+    const query = new URLSearchParams({ areaMin: value.areaMin, areaMax: value.areaMax });
+    Object.entries(value.selection).forEach(([block, ids]) => ids.forEach((id) => query.append(`block-${block}`, id)));
+    return query;
   }
 
-  function update() {
-    const area = clampArea(areaInput.value);
-    const selection = getSelection();
-    const result = calculate(area, selection);
-
-    totalEl.textContent = rub(result.total);
-    mobileTotalEl.textContent = rub(result.total);
-    perM2El.innerHTML = '';
-    perM2El.append(`≈ ${rub(result.perM2)} за м² · ${area} м²`);
-
-    linesEl.innerHTML = '';
-    result.lines.forEach((line) => {
-      const li = document.createElement('li');
-      const label = document.createElement('span');
-      label.textContent = `${line.block}: ${line.option}`;
-      const value = document.createElement('b');
-      value.textContent = line.unit === 'coef' ? '' : rub(line.amount);
-      li.append(label, value);
-      linesEl.append(li);
-    });
-
-    if (calcField) calcField.value = JSON.stringify({ area, selection });
+  function syncArea() {
+    minInput.value = minRange.value = areaMin;
+    maxInput.value = maxRange.value = areaMax;
+    const span = limits.max - limits.min;
+    fill.style.left = `${100 * (areaMin - limits.min) / span}%`;
+    fill.style.right = `${100 * (limits.max - areaMax) / span}%`;
+    minRange.style.zIndex = areaMin === limits.max ? '3' : '';
   }
 
-  // Ползунок и поле ввода площади синхронизированы между собой.
-  range.addEventListener('input', () => {
-    areaInput.value = range.value;
-    update();
+  function updateLead() {
+    if (calcField) calcField.value = JSON.stringify(filters());
+  }
+
+  async function updateResults(value, version) {
+    controller = new AbortController();
+    const query = queryFor(value);
+    status.textContent = 'Подбираем проекты…';
+    results.setAttribute('aria-busy', 'true');
+    try {
+      const response = await fetch(`/calculator/matches?${query}`, { signal: controller.signal });
+      if (!response.ok) throw new Error('Could not load project matches');
+      const html = await response.text();
+      if (version !== generation) return;
+      results.innerHTML = html;
+      mobileCount.textContent = `Найдено: ${results.querySelector('[data-match-count]').dataset.matchCount}`;
+      status.textContent = '';
+      const url = new URL(window.location.href);
+      url.search = query.toString();
+      history.replaceState(null, '', url);
+    } catch (error) {
+      if (error.name !== 'AbortError' && version === generation) {
+        status.textContent = 'Не удалось обновить подбор. Попробуйте ещё раз.';
+      }
+    } finally {
+      if (version === generation) results.setAttribute('aria-busy', 'false');
+    }
+  }
+
+  function schedule(delay = 200) {
+    clearTimeout(timer);
+    controller?.abort();
+    const version = ++generation;
+    const value = filters();
+    updateLead();
+    timer = setTimeout(() => updateResults(value, version), delay);
+  }
+
+  function commitArea(source) {
+    const bound = (value, fallback) => value === '' || !Number.isFinite(Number(value))
+      ? fallback : Math.min(limits.max, Math.max(limits.min, Math.round(Number(value))));
+    areaMin = bound(minInput.value, areaMin);
+    areaMax = bound(maxInput.value, areaMax);
+    if (areaMin > areaMax) {
+      if (source === 'min') areaMax = areaMin;
+      else areaMin = areaMax;
+    }
+    syncArea();
+    schedule(0);
+  }
+
+  minRange.addEventListener('input', () => {
+    areaMin = Math.min(Number(minRange.value), areaMax);
+    syncArea();
+    schedule();
   });
-  areaInput.addEventListener('input', () => {
-    if (areaInput.value === '') return;
-    range.value = clampArea(areaInput.value);
-    update();
+  maxRange.addEventListener('input', () => {
+    areaMax = Math.max(Number(maxRange.value), areaMin);
+    syncArea();
+    schedule();
   });
-  areaInput.addEventListener('change', () => {
-    areaInput.value = clampArea(areaInput.value);
-    range.value = areaInput.value;
-    update();
+  [minInput, maxInput].forEach((input) => {
+    input.addEventListener('input', () => {
+      const from = Number(minInput.value);
+      const to = Number(maxInput.value);
+      if (!minInput.value || !maxInput.value || from < limits.min || to > limits.max || from > to) return;
+      areaMin = Math.round(from);
+      areaMax = Math.round(to);
+      syncArea();
+      schedule();
+    });
+    input.addEventListener('change', () => commitArea(input === minInput ? 'min' : 'max'));
+  });
+  form.addEventListener('change', (event) => {
+    if (event.target.classList.contains('calc-option__input')) schedule(0);
+  });
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    commitArea('max');
+    if (window.matchMedia('(max-width: 960px)').matches) {
+      document.getElementById('calcMatches').scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+  document.addEventListener('click', (event) => {
+    const reset = event.target.closest('[data-calc-reset]');
+    if (!reset) return;
+    event.preventDefault();
+    areaMin = limits.min;
+    areaMax = limits.max;
+    form.querySelectorAll('.calc-option__input').forEach((input) => { input.checked = input.type === 'radio' && !input.value; });
+    syncArea();
+    schedule(0);
   });
 
-  form.addEventListener('change', (e) => {
-    if (e.target.classList.contains('calc-option__input')) update();
-  });
-
-  // Нижняя плашка с итогом на телефоне прячется, когда видна основная карточка итога.
   const bar = document.getElementById('calcMobileBar');
-  const summary = document.getElementById('calcSummary');
-  const formSection = document.getElementById('form');
   if (bar && 'IntersectionObserver' in window) {
     const visible = new Set();
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((en) => (en.isIntersecting ? visible.add(en.target) : visible.delete(en.target)));
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => entry.isIntersecting ? visible.add(entry.target) : visible.delete(entry.target));
       bar.classList.toggle('is-hidden', visible.size > 0);
     });
-    if (summary) io.observe(summary);
-    if (formSection) io.observe(formSection);
+    observer.observe(document.getElementById('calcMatches'));
+    observer.observe(document.getElementById('form'));
   }
-
-  update();
+  syncArea();
+  updateLead();
+  document.getElementById('calcAreaSlider').hidden = false;
 });

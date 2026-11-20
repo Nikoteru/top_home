@@ -10,7 +10,7 @@ const { getLeads, updateLeadStatus, updateLeadComment, deleteLead } = require('.
 const { getAdmin, verifyLogin, updateCredentials } = require('../data/adminStore');
 const { requireAuth } = require('../middleware/auth');
 const { ICONS, DEFAULT_ICON } = require('../data/calcIcons');
-const { UNITS, toNumber } = require('../utils/calc');
+const { normalizeHouseParameters, getHouseParameterFields } = require('../utils/houseParameters');
 
 const STATUS_LABELS = { new: 'Новая', completed: 'Выполнена', rejected: 'Отклонена' };
 
@@ -138,6 +138,7 @@ const CONTENT_PAGES = {
   portfolio: 'admin/portfolio',
   stages: 'admin/stages',
   calculator: 'admin/calculator',
+  calculatorDirectory: 'admin/calculator-directory',
 };
 
 function renderContentPage(req, res, page, { error = null, status = 200 } = {}) {
@@ -147,7 +148,7 @@ function renderContentPage(req, res, page, { error = null, status = 200 } = {}) 
     error,
     newRequestsCount: countNewLeads(),
     icons: ICONS,
-    units: UNITS,
+    getHouseParameterFields,
   });
 }
 
@@ -158,6 +159,7 @@ router.get('/contacts', requireAuth, (req, res) => renderContentPage(req, res, '
 router.get('/portfolio', requireAuth, (req, res) => renderContentPage(req, res, 'portfolio'));
 router.get('/stages', requireAuth, (req, res) => renderContentPage(req, res, 'stages'));
 router.get('/calculator', requireAuth, (req, res) => renderContentPage(req, res, 'calculator'));
+router.get('/calculator/directory', requireAuth, (req, res) => renderContentPage(req, res, 'calculatorDirectory'));
 
 // ---- Обращения (заявки с формы на сайте) ----
 
@@ -202,7 +204,7 @@ router.get('/requests/export.xlsx', requireAuth, async (req, res, next) => {
       { header: 'E-mail', key: 'email', width: 26 },
       { header: 'Статус', key: 'status', width: 16 },
       { header: 'Комментарий', key: 'comment', width: 40 },
-      { header: 'Расчёт из калькулятора', key: 'details', width: 60 },
+      { header: 'Параметры подбора проекта', key: 'details', width: 60 },
     ];
     sheet.getRow(1).font = { bold: true };
 
@@ -359,11 +361,12 @@ router.post('/house', requireAuth, (req, res) => {
       image: req.file ? `/uploads/${req.file.filename}` : DEFAULT_HOUSE_IMAGE,
       gallery: [],
       specs: parseSpecs(specs),
+      parameters: normalizeHouseParameters(content.calculator, req.body.parameters),
       showOnHome: req.body.showOnHome === '1',
     };
     content.houses.push(house);
     saveContent(content);
-    res.redirect('/admin/houses?saved=1');
+    res.redirect(`/admin/houses?saved=1&open=${encodeURIComponent(house.id)}`);
   });
 });
 
@@ -383,6 +386,9 @@ router.post('/house/:id', requireAuth, (req, res) => {
     if (description) house.description = description;
     if (fullDescription !== undefined) house.fullDescription = fullDescription.trim();
     if (specs !== undefined) house.specs = parseSpecs(specs);
+    if (req.body.parametersPresent === '1') {
+      house.parameters = normalizeHouseParameters(content.calculator, req.body.parameters);
+    }
     // Снятая галочка в форму не отправляется вовсе, поэтому ориентируемся на
     // скрытый маркер: он говорит, что поле в форме было, и тогда отсутствие
     // showOnHome означает «убрать с главной».
@@ -669,16 +675,16 @@ router.post('/stages/:id/delete', requireAuth, (req, res) => {
   stagesRedirect(res);
 });
 
-// ---- Калькулятор стоимости: общие настройки, блоки и варианты ----
+// ---- Подбор проектов: общие настройки, блоки и варианты ----
 
-function calcRedirect(res, blockId) {
+function redirectToCalculatorDirectory(res, blockId) {
   const anchor = blockId ? `#calc-block-${encodeURIComponent(blockId)}` : '';
-  res.redirect(`/admin/calculator?saved=1${anchor}`);
+  res.redirect(`/admin/calculator/directory?saved=1${anchor}`);
 }
 
 function getCalc(content) {
   if (!content.calculator) {
-    content.calculator = { title: 'Калькулятор стоимости дома', intro: '', note: '', area: { min: 60, max: 400, step: 5, default: 120 }, blocks: [] };
+    content.calculator = { title: 'Подбор проекта дома', intro: '', note: '', area: { min: 60, max: 400 }, blocks: [] };
   }
   if (!Array.isArray(content.calculator.blocks)) content.calculator.blocks = [];
   return content.calculator;
@@ -688,41 +694,35 @@ function nextOptionId(calc) {
   return calc.blocks.reduce((max, b) => (b.options || []).reduce((m, o) => Math.max(m, Number(o.id) || 0), max), 0) + 1;
 }
 
-// Цена варианта: для коэффициента — положительное число (по умолчанию 1),
-// для остальных — неотрицательная сумма в рублях.
-function parseOptionPrice(raw, unit) {
-  const value = toNumber(raw, unit === 'coef' ? 1 : 0);
-  if (unit === 'coef') return value > 0 ? value : 1;
-  return Math.max(0, Math.round(value));
+// Удалённые варианты не должны вернуться у дома, если их id позднее
+// переиспользуется для другого варианта или блока калькулятора.
+function syncHouseParameters(content) {
+  content.houses.forEach((house) => {
+    if (house.parameters) house.parameters = normalizeHouseParameters(content.calculator, house.parameters);
+  });
 }
 
 router.post('/calculator/settings', requireAuth, (req, res) => {
   const content = getContent();
   const calc = getCalc(content);
-  const { title, intro, note, areaMin, areaMax, areaStep, areaDefault } = req.body;
-
-  const min = Math.round(toNumber(areaMin, NaN));
-  const max = Math.round(toNumber(areaMax, NaN));
-  const step = Math.round(toNumber(areaStep, NaN));
-  const def = Math.round(toNumber(areaDefault, NaN));
-  if (![min, max, step, def].every(Number.isFinite) || min < 1 || step < 1 || max <= min) {
-    return renderPageError(req, res, 'calculator', 'Проверьте площадь: минимум ≥ 1, максимум больше минимума, шаг ≥ 1');
-  }
-  if (def < min || def > max) {
-    return renderPageError(req, res, 'calculator', 'Площадь по умолчанию должна быть между минимумом и максимумом');
+  const { title, intro, note, areaMin, areaMax } = req.body;
+  const min = Number(areaMin);
+  const max = Number(areaMax);
+  if (![min, max].every(Number.isSafeInteger) || min < 1 || max <= min) {
+    return renderPageError(req, res, 'calculator', 'Проверьте диапазон площади: минимум ≥ 1, максимум больше минимума, значения — целые числа');
   }
 
-  calc.title = (title || '').trim() || 'Калькулятор стоимости дома';
+  calc.title = (title || '').trim() || 'Подбор проекта дома';
   calc.intro = (intro || '').trim();
   calc.note = (note || '').trim();
-  calc.area = { min, max, step, default: def };
+  calc.area = { min, max };
   saveContent(content);
-  calcRedirect(res);
+  res.redirect('/admin/calculator?saved=1');
 });
 
 router.post('/calculator/blocks', requireAuth, (req, res) => {
   const title = (req.body.title || '').trim();
-  if (!title) return renderPageError(req, res, 'calculator', 'Укажите название блока');
+  if (!title) return renderPageError(req, res, 'calculatorDirectory', 'Укажите название блока');
 
   const content = getContent();
   const calc = getCalc(content);
@@ -734,7 +734,7 @@ router.post('/calculator/blocks', requireAuth, (req, res) => {
   };
   calc.blocks.push(block);
   saveContent(content);
-  calcRedirect(res, block.id);
+  redirectToCalculatorDirectory(res, block.id);
 });
 
 // Сохранение блока целиком: название, тип выбора и все варианты в нём
@@ -745,7 +745,7 @@ router.post('/calculator/blocks/:id', requireAuth, (req, res) => {
     const dropUploads = () => uploadedFiles.forEach((f) => deleteUploadedImage(f.path));
     if (err) {
       dropUploads();
-      return renderPageError(req, res, 'calculator', err.message);
+      return renderPageError(req, res, 'calculatorDirectory', err.message);
     }
 
     const content = getContent();
@@ -753,13 +753,13 @@ router.post('/calculator/blocks/:id', requireAuth, (req, res) => {
     const block = calc.blocks.find((b) => String(b.id) === req.params.id);
     if (!block) {
       dropUploads();
-      return renderPageError(req, res, 'calculator', 'Блок не найден');
+      return renderPageError(req, res, 'calculatorDirectory', 'Блок не найден');
     }
 
     const title = (req.body.title || '').trim();
     if (!title) {
       dropUploads();
-      return renderPageError(req, res, 'calculator', 'Название блока не может быть пустым');
+      return renderPageError(req, res, 'calculatorDirectory', 'Название блока не может быть пустым');
     }
 
     const fileFor = (field) => {
@@ -791,11 +791,10 @@ router.post('/calculator/blocks/:id', requireAuth, (req, res) => {
         deleteUploadedImage(option.image);
         return;
       }
-      const unit = UNITS[row.unit] ? row.unit : 'm2';
       option.title = (row.title || '').trim() || option.title;
       option.hint = (row.hint || '').trim();
-      option.unit = unit;
-      option.price = parseOptionPrice(row.price, unit);
+      delete option.price;
+      delete option.unit;
       applyIcon(option, row.icon, fileFor(`icon_${i}`));
       kept.push(option);
     });
@@ -808,15 +807,12 @@ router.post('/calculator/blocks/:id', requireAuth, (req, res) => {
     const fresh = req.body.newOption || {};
     const freshTitle = (fresh.title || '').trim();
     if (freshTitle) {
-      const unit = UNITS[fresh.unit] ? fresh.unit : 'm2';
       const option = {
         id: nextOptionId(calc),
         title: freshTitle,
         hint: (fresh.hint || '').trim(),
         icon: ICONS[fresh.icon] ? fresh.icon : DEFAULT_ICON,
         image: '',
-        price: parseOptionPrice(fresh.price, unit),
-        unit,
       };
       applyIcon(option, null, fileFor('icon_new'));
       kept.push(option);
@@ -825,10 +821,11 @@ router.post('/calculator/blocks/:id', requireAuth, (req, res) => {
     block.title = title;
     block.multiple = req.body.multiple === '1';
     block.options = kept;
+    syncHouseParameters(content);
 
     uploadedFiles.filter((f) => !f.used).forEach((f) => deleteUploadedImage(f.path));
     saveContent(content);
-    calcRedirect(res, block.id);
+    redirectToCalculatorDirectory(res, block.id);
   });
 });
 
@@ -836,26 +833,27 @@ router.post('/calculator/blocks/:id/move', requireAuth, (req, res) => {
   const content = getContent();
   const list = getCalc(content).blocks;
   const index = list.findIndex((b) => String(b.id) === req.params.id);
-  if (index === -1) return renderPageError(req, res, 'calculator', 'Блок не найден');
+  if (index === -1) return renderPageError(req, res, 'calculatorDirectory', 'Блок не найден');
 
   const target = req.body.direction === 'up' ? index - 1 : index + 1;
   if (target >= 0 && target < list.length) {
     [list[index], list[target]] = [list[target], list[index]];
     saveContent(content);
   }
-  calcRedirect(res, req.params.id);
+  redirectToCalculatorDirectory(res, req.params.id);
 });
 
 router.post('/calculator/blocks/:id/delete', requireAuth, (req, res) => {
   const content = getContent();
   const list = getCalc(content).blocks;
   const index = list.findIndex((b) => String(b.id) === req.params.id);
-  if (index === -1) return renderPageError(req, res, 'calculator', 'Блок не найден');
+  if (index === -1) return renderPageError(req, res, 'calculatorDirectory', 'Блок не найден');
 
   const [removed] = list.splice(index, 1);
   (removed.options || []).forEach((o) => deleteUploadedImage(o.image));
+  syncHouseParameters(content);
   saveContent(content);
-  calcRedirect(res);
+  redirectToCalculatorDirectory(res);
 });
 
 function renderPageError(req, res, page, message) {

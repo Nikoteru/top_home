@@ -10,106 +10,100 @@
 <body>
   <%- include('partials/header') %>
   <%- include('partials/calc-icons', { icons }) %>
-  <%
-    function rub(v) { return Math.round(v).toLocaleString('ru-RU').replace(/ /g, ' ') + ' ₽'; }
-    function priceLabel(o) {
-      var p = Number(o.price) || 0;
-      if (o.unit === 'm2') return p ? rub(p) + '/м²' : 'входит в цену';
-      if (o.unit === 'fixed') return '+' + rub(p);
-      if (p === 1) return 'базовая цена';
-      var pct = Math.round((p - 1) * 100);
-      return (pct > 0 ? '+' : '−') + Math.abs(pct) + '% к цене за м²';
-    }
-    var area = calc.area || { min: 60, max: 400, step: 5, default: 120 };
-  %>
-
   <section class="container projects-page calc-page">
     <nav class="breadcrumb">
-      <a href="/">Главная</a> <span>/</span> <span>Калькулятор</span>
+      <a href="/">Главная</a> <span>/</span> <span>Подбор проекта</span>
     </nav>
-
     <div class="projects-head">
       <div>
         <h1><%= calc.title %></h1>
         <% if (calc.intro) { %><p class="projects-count"><%= calc.intro %></p><% } %>
       </div>
     </div>
-
     <div class="calc-layout">
-      <form class="calc-form" id="calcForm" onsubmit="return false">
+      <form class="calc-form" id="calcForm" method="GET" action="/calculator">
         <section class="calc-block">
           <h2 class="calc-block__title"><span class="calc-block__num">1</span> Площадь дома</h2>
-          <div class="calc-area">
-            <input type="range" id="calcAreaRange" min="<%= area.min %>" max="<%= area.max %>" step="<%= area.step %>" value="<%= area.default %>" aria-label="Площадь дома, м²">
-            <label class="calc-area__value">
-              <input type="number" id="calcAreaInput" min="<%= area.min %>" max="<%= area.max %>" step="<%= area.step %>" value="<%= area.default %>" inputmode="numeric">
+          <div class="calc-area-fields">
+            <label class="calc-area__value">От
+              <input type="number" name="areaMin" id="calcAreaMin" min="<%= area.min %>" max="<%= area.max %>" step="1" value="<%= filters.areaMin %>" inputmode="numeric" required>
+              <span>м²</span>
+            </label>
+            <span class="calc-area-fields__dash" aria-hidden="true">—</span>
+            <label class="calc-area__value">До
+              <input type="number" name="areaMax" id="calcAreaMax" min="<%= area.min %>" max="<%= area.max %>" step="1" value="<%= filters.areaMax %>" inputmode="numeric" required>
               <span>м²</span>
             </label>
           </div>
+          <div class="calc-range" id="calcAreaSlider" hidden>
+            <div class="calc-range__track"><span id="calcAreaFill"></span></div>
+            <input type="range" id="calcAreaMinRange" min="<%= area.min %>" max="<%= area.max %>" step="1" value="<%= filters.areaMin %>" aria-label="Минимальная площадь дома, м²">
+            <input type="range" id="calcAreaMaxRange" min="<%= area.min %>" max="<%= area.max %>" step="1" value="<%= filters.areaMax %>" aria-label="Максимальная площадь дома, м²">
+          </div>
           <div class="calc-area__scale"><span><%= area.min %> м²</span><span><%= area.max %> м²</span></div>
         </section>
-
-        <% calc.blocks.forEach(function(block, bi) { if (!block.options || !block.options.length) return; %>
-          <section class="calc-block">
-            <h2 class="calc-block__title">
+        <% calc.blocks.forEach(function(block, bi) { if (!block.options || !block.options.length) return; var selected = filters.selection[block.id]; %>
+          <fieldset class="calc-block calc-block--choices">
+            <legend class="calc-block__title">
               <span class="calc-block__num"><%= bi + 2 %></span> <%= block.title %>
               <% if (block.multiple) { %><span class="calc-block__hint">можно выбрать несколько</span><% } %>
-            </h2>
+            </legend>
+            <% if (block.multiple) { %><p class="calc-block__description">Не выбирайте опции, если они не важны. Если выбрать несколько, у проекта должны быть все отмеченные опции.</p><% } %>
             <div class="calc-options">
-              <% block.options.forEach(function(option, oi) { %>
+              <% if (!block.multiple) { %>
                 <label class="calc-option">
-                  <input class="calc-option__input" type="<%= block.multiple ? 'checkbox' : 'radio' %>"
-                         name="block-<%= block.id %>" value="<%= option.id %>" data-block-id="<%= block.id %>"
-                         <%= !block.multiple && oi === 0 ? 'checked' : '' %>>
+                  <input class="calc-option__input" type="radio" name="block-<%= block.id %>" value="" data-block-id="<%= block.id %>" <%= !selected.length ? 'checked' : '' %>>
+                  <span class="calc-option__card">
+                    <span class="calc-option__any" aria-hidden="true">Любой</span>
+                    <span class="calc-option__title">Не важно</span>
+                    <span class="calc-option__hint">Не учитывать при подборе</span>
+                  </span>
+                </label>
+              <% } %>
+              <% block.options.forEach(function(option) { %>
+                <label class="calc-option">
+                  <input class="calc-option__input" type="<%= block.multiple ? 'checkbox' : 'radio' %>" name="block-<%= block.id %>" value="<%= option.id %>" data-block-id="<%= block.id %>" <%= selected.includes(String(option.id)) ? 'checked' : '' %>>
                   <span class="calc-option__card">
                     <%- include('partials/calc-option-icon', { option, icons }) %>
                     <span class="calc-option__title"><%= option.title %></span>
                     <% if (option.hint) { %><span class="calc-option__hint"><%= option.hint %></span><% } %>
-                    <span class="calc-option__price"><%= priceLabel(option) %></span>
                   </span>
                 </label>
               <% }); %>
             </div>
-          </section>
+          </fieldset>
         <% }); %>
+        <div class="calc-actions">
+          <button type="submit" class="btn btn-accent">Показать проекты</button>
+          <a href="/calculator" class="calc-reset" data-calc-reset>Сбросить фильтры</a>
+        </div>
       </form>
-
-      <aside class="calc-summary" id="calcSummary">
-        <div class="calc-summary__card">
-          <span class="calc-summary__label">Ориентировочная стоимость</span>
-          <div class="calc-summary__total" id="calcTotal"><%= rub(initial.total) %></div>
-          <div class="calc-summary__per" id="calcPerM2">≈ <%= rub(initial.perM2) %> за м² · <span id="calcAreaLabel"><%= initial.area %></span> м²</div>
-          <ul class="calc-summary__lines" id="calcLines">
-            <% initial.lines.forEach(function(l) { %>
-              <li><span><%= l.blockTitle %>: <%= l.optionTitle %></span><b><%= l.unit === 'coef' ? '' : rub(l.amount) %></b></li>
-            <% }); %>
-          </ul>
-          <a href="#form" class="btn btn-accent calc-summary__btn">Получить точный расчёт</a>
-          <% if (calc.note) { %><p class="calc-summary__note"><%= calc.note %></p><% } %>
+      <aside class="calc-matches" id="calcMatches" aria-labelledby="calcMatchesTitle">
+        <div class="calc-matches__card">
+          <h2 id="calcMatchesTitle">Подходящие проекты</h2>
+          <p class="calc-matches__hint">По выбранным характеристикам и диапазону площади</p>
+          <p class="calc-request-status" id="calcRequestStatus" role="status"></p>
+          <div class="calc-matches__results" id="calcMatchResults" aria-busy="false">
+            <%- include('partials/project-matches', { matches }) %>
+          </div>
+          <% if (calc.note) { %><p class="calc-matches__note"><%= calc.note %></p><% } %>
         </div>
       </aside>
     </div>
   </section>
-
   <div class="calc-mobilebar" id="calcMobileBar">
-    <div>
-      <span class="calc-mobilebar__label">Итого</span>
-      <b id="calcMobileTotal"><%= rub(initial.total) %></b>
-    </div>
-    <a href="#form" class="btn btn-accent btn-small">Получить расчёт</a>
+    <div><span class="calc-mobilebar__label">Подходящие проекты</span><b id="calcMobileCount">Найдено: <%= matches.length %></b></div>
+    <a href="#calcMatches" class="btn btn-accent btn-small">Смотреть</a>
   </div>
-
-  <script type="application/json" id="calcConfig"><%- JSON.stringify({ area: calc.area, blocks: calc.blocks.map(function(b) { return { id: b.id, title: b.title, multiple: !!b.multiple, options: (b.options || []).map(function(o) { return { id: o.id, title: o.title, price: o.price, unit: o.unit }; }) }; }) }).replace(/</g, '\\u003c') %></script>
-
+  <script type="application/json" id="calcConfig"><%- JSON.stringify({ area, filters }).replace(/</g, '\u003c') %></script>
   <%- include('partials/lead-cta', {
-    ctaTitle: 'Получите точную смету',
-    ctaText: 'Оставьте контакты — инженер проверит выбранную конфигурацию, учтёт ваш участок и пришлёт подробный расчёт. Выбранные параметры придут вместе с заявкой.',
+    ctaTitle: 'Поможем выбрать проект',
+    ctaText: 'Оставьте контакты — подберём дом под ваш участок и пожелания. Выбранный диапазон площади и характеристики придут вместе с заявкой.',
     returnTo: '/calculator',
     withCalc: true,
+    calcValue: JSON.stringify(filters),
   }) %>
-
   <%- include('partials/footer') %>
-
   <script src="/js/main.js"></script>
   <script src="/js/calculator.js"></script>
   <script src="/js/form-validation.js"></script>

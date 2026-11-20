@@ -53,10 +53,10 @@
         </div>
         <p class="house-detail-description"><%= house.fullDescription || house.description %></p>
 
-        <% if (house.specs && house.specs.length > 0) { %>
+        <% if (specs.length > 0) { %>
           <h2 class="section-title section-title--left">Характеристики</h2>
           <dl class="specs-table">
-            <% house.specs.forEach(function(spec) { %>
+            <% specs.forEach(function(spec) { %>
               <div class="specs-row">
                 <dt><%= spec.label %></dt>
                 <dd><%= spec.value %></dd>

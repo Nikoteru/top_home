@@ -1,0 +1,26 @@
+<div class="calc-matches__content" data-match-count="<%= matches.length %>">
+  <p class="calc-matches__count" aria-live="polite">Найдено: <strong><%= matches.length %></strong></p>
+  <% if (matches.length) { %>
+    <div class="calc-projects-list">
+      <% matches.forEach(function(house) { %>
+        <article class="calc-project" data-project-id="<%= house.id %>">
+          <a href="/houses/<%= encodeURIComponent(house.id) %>" class="calc-project__image" tabindex="-1" aria-hidden="true">
+            <img src="<%= house.image %>" alt="" loading="lazy">
+          </a>
+          <div class="calc-project__body">
+            <h3><a href="/houses/<%= encodeURIComponent(house.id) %>"><%= house.title %></a></h3>
+            <span class="calc-project__area"><%= house.area %></span>
+            <a href="/houses/<%= encodeURIComponent(house.id) %>" class="btn btn-outline btn-small">Подробнее о проекте</a>
+          </div>
+        </article>
+      <% }); %>
+    </div>
+  <% } else { %>
+    <div class="calc-empty">
+      <h3>Подходящих проектов пока нет</h3>
+      <p>Расширьте диапазон площади или измените выбранные параметры.</p>
+      <a href="/calculator" class="calc-reset" data-calc-reset>Сбросить фильтры</a>
+      <a href="#form" class="btn btn-outline btn-small">Помочь с подбором</a>
+    </div>
+  <% } %>
+</div>

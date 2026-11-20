@@ -1,0 +1,39 @@
+<fieldset class="admin-project-parameters">
+  <legend>Параметры проекта</legend>
+  <input type="hidden" name="parametersPresent" value="1">
+  <p class="field-hint">Выбранные значения появятся в таблице характеристик на странице дома и будут участвовать в подборе проектов. Варианты можно изменить в <a href="/admin/calculator/directory">справочнике калькулятора</a>.</p>
+
+  <% if (!fields.length) { %>
+    <p class="field-hint">Добавьте блоки и варианты в настройках подбора, чтобы задать параметры проекта.</p>
+  <% } %>
+
+  <div class="admin-project-parameters__grid">
+    <% fields.filter(function(field) { return !field.multiple; }).forEach(function(field) { %>
+      <label><%= field.title %>
+        <select name="parameters[<%= field.id %>]">
+          <option value="" <%= !field.selectedIds.length ? 'selected' : '' %>>Не указано</option>
+          <% field.options.forEach(function(option) { %>
+            <option value="<%= option.id %>" <%= field.selectedIds.includes(String(option.id)) ? 'selected' : '' %>><%= option.title %></option>
+          <% }); %>
+        </select>
+      </label>
+    <% }); %>
+  </div>
+
+  <% fields.filter(function(field) { return field.multiple; }).forEach(function(field) { %>
+    <fieldset class="admin-project-parameters__multiple">
+      <legend><%= field.title %></legend>
+      <div class="admin-project-parameters__options">
+        <% field.options.forEach(function(option) { %>
+          <label class="admin-checkbox">
+            <input type="checkbox" name="parameters[<%= field.id %>][]" value="<%= option.id %>" <%= field.selectedIds.includes(String(option.id)) ? 'checked' : '' %>>
+            <%= option.title %>
+          </label>
+        <% }); %>
+      </div>
+      <% if (!field.options.length) { %>
+        <p class="field-hint">В этом блоке пока нет вариантов.</p>
+      <% } %>
+    </fieldset>
+  <% }); %>
+</fieldset>

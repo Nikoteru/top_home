@@ -61,8 +61,9 @@
               <label>Полное описание <span class="field-hint">(на странице дома)</span>
                 <textarea name="fullDescription" rows="4"><%= house.fullDescription || '' %></textarea>
               </label>
-              <label>Характеристики <span class="field-hint">(по одной на строку, формат «Метка: Значение»)</span>
-                <textarea name="specs" rows="6" class="specs-textarea" placeholder="Спальни: 3&#10;Санузлы: 2&#10;Материал стен: клеёный брус"><%= (house.specs || []).map(function(s) { return s.label + ': ' + s.value; }).join('\n') %></textarea>
+              <%- include('../partials/admin-house-parameters', { fields: getHouseParameterFields(house, content.calculator) }) %>
+              <label>Дополнительные характеристики <span class="field-hint">(по одной на строку, формат «Метка: Значение»)</span>
+                <textarea name="specs" rows="5" class="specs-textarea" placeholder="Спальни: 3&#10;Санузлы: 2&#10;Площадь участка: от 8 соток"><%= (house.specs || []).map(function(s) { return s.label + ': ' + s.value; }).join('\n') %></textarea>
               </label>
               <input type="hidden" name="showOnHomeField" value="1">
               <label class="admin-checkbox">
@@ -132,8 +133,9 @@
           <label>Полное описание <span class="field-hint">(на странице дома)</span>
             <textarea name="fullDescription" rows="4" placeholder="Развёрнутое описание проекта"></textarea>
           </label>
-          <label>Характеристики <span class="field-hint">(по одной на строку, формат «Метка: Значение»)</span>
-            <textarea name="specs" rows="6" class="specs-textarea" placeholder="Спальни: 3&#10;Санузлы: 2&#10;Материал стен: клеёный брус"></textarea>
+          <%- include('../partials/admin-house-parameters', { fields: getHouseParameterFields({}, content.calculator) }) %>
+          <label>Дополнительные характеристики <span class="field-hint">(по одной на строку, формат «Метка: Значение»)</span>
+            <textarea name="specs" rows="5" class="specs-textarea" placeholder="Спальни: 3&#10;Санузлы: 2&#10;Площадь участка: от 8 соток"></textarea>
           </label>
           <label class="admin-checkbox">
             <input type="checkbox" name="showOnHome" value="1">
