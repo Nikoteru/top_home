@@ -1,0 +1,28 @@
+.estimate-run-section + .estimate-run-section { margin-top: 32px; }
+.estimate-run-section h2 { margin: 0 0 12px; font-size: 18px; }
+.estimate-run-section .estimate-list-item + .estimate-list-item { margin-top: 8px; }
+.estimate-run-section .estimate-list-item h3 { margin: 0; font-size: 16px; }
+.estimate-run-section .estimate-list-item h3 a:hover { text-decoration: underline; }
+
+.estimate-run-hint {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--sheet-grid);
+  background: #f5f7fb;
+  color: #455a79;
+  font-size: 13px;
+}
+.estimate-table .estimate-run-base { background: #f0f5ff; font-weight: 700; }
+.estimate-table .estimate-run-base input { font-weight: inherit; }
+.estimate-table .estimate-run-base input::placeholder {
+  color: #455a79;
+  opacity: 1;
+}
+.estimate-table .estimate-run-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.estimate-table .estimate-run-mode { font-size: 12px; color: #455a79; }
+.estimate-table .estimate-run-divider td { padding-block: 2px; }
+.estimate-table [data-run-invalid] { color: #922d2d; background: #fceeed; }

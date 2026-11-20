@@ -5,53 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= item.title %> — Портфолио</title>
   <meta name="description" content="<%= (item.description || item.title).slice(0, 160) %>">
-  <link rel="stylesheet" href="/css/style.css">
+  <%- include('partials/public-styles') %>
 </head>
 <body>
   <%- include('partials/header') %>
 
-  <section class="container house-detail">
+  <main>
+  <div class="container house-detail">
     <nav class="breadcrumb">
       <a href="/">Главная</a> <span>/</span> <a href="/portfolio">Портфолио</a> <span>/</span> <span><%= item.title %></span>
     </nav>
 
-    <% if (photos.length > 0) { %>
-      <div class="house-detail-gallery">
-        <button type="button" class="gallery-main" id="galleryMain" style="background-image:url('<%= photos[0] %>')" aria-label="Открыть фото на весь экран">
-          <span class="gallery-zoom-hint">⤢ Увеличить</span>
-        </button>
-        <% if (photos.length > 1) { %>
-          <div class="gallery-thumbs">
-            <% photos.forEach(function(photo, i) { %>
-              <button type="button" class="gallery-thumb <%= i === 0 ? 'is-active' : '' %>" data-image="<%= photo %>">
-                <img src="<%= photo %>" alt="<%= item.title %> — фото <%= i + 1 %>" loading="lazy">
-              </button>
-            <% }); %>
-          </div>
-        <% } %>
+    <header class="project-heading">
+      <h1><%= item.title %></h1>
+      <div class="house-detail-meta">
+        <% if (media.photos.length && !media.illustrated) { %><span class="house-detail-area"><%= media.photos.length %> фото</span><% } %>
+        <% if (item.price) { %><strong class="house-detail-price"><%= item.price %></strong><% } %>
       </div>
-
-      <div class="lightbox" id="lightbox" hidden>
-        <button type="button" class="lightbox-close" id="lightboxClose" aria-label="Закрыть">✕</button>
-        <button type="button" class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Предыдущее фото">‹</button>
-        <img class="lightbox-image" id="lightboxImage" src="" alt="">
-        <button type="button" class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Следующее фото">›</button>
-        <div class="lightbox-counter" id="lightboxCounter"></div>
-      </div>
-
-      <script>
-        // Галерея и лайтбокс общие со страницей дома (/js/house.js).
-        window.HOUSE_GALLERY = <%- JSON.stringify(photos).replace(/</g, '\\u003c') %>;
-      </script>
-    <% } %>
+    </header>
+    <%- include('partials/public-gallery', { media }) %>
 
     <div class="portfolio-detail">
       <div class="portfolio-detail__info">
-        <h1><%= item.title %></h1>
-        <div class="house-detail-meta">
-          <% if (item.price) { %><span class="house-detail-price"><%= item.price %></span><% } %>
-          <% if (photos.length > 0) { %><span class="house-detail-area"><%= photos.length %> фото</span><% } %>
-        </div>
         <% if (item.address) { %>
           <p class="portfolio-detail__address">
             <%= item.address %>
@@ -74,26 +49,20 @@
       <section class="related-houses">
         <h2 class="section-title">Другие объекты</h2>
         <div class="houses-grid">
-          <% otherItems.forEach(function(p) { var ph = p.photos || []; %>
-            <article class="house-card portfolio-card">
-              <a href="/portfolio/<%= p.id %>" class="house-card__image" style="background-image:url('<%= ph[0] || '/images/placeholder-new.svg' %>')" aria-label="<%= p.title %>"></a>
-              <div class="house-card__body">
-                <h3><a href="/portfolio/<%= p.id %>" class="house-card__title-link"><%= p.title %></a></h3>
-                <% if (p.price) { %><div class="house-card__meta"><span><%= p.price %></span></div><% } %>
-                <a href="/portfolio/<%= p.id %>" class="btn btn-outline">Смотреть объект</a>
-              </div>
-            </article>
+          <% otherItems.forEach(function(otherItem) { %>
+            <%- include('partials/portfolio-card', { item: otherItem, showAddress: false }) %>
           <% }); %>
         </div>
       </section>
     <% } %>
-  </section>
+  </div>
 
   <%- include('partials/lead-cta', {
     ctaTitle: 'Хотите такой же дом?',
     ctaText: 'Оставьте заявку — рассчитаем стоимость похожего дома на вашем участке.',
     returnTo: '/portfolio/' + item.id,
   }) %>
+  </main>
 
   <%- include('partials/footer') %>
 

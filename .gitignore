@@ -2,5 +2,15 @@ node_modules/
 .env
 src/data/admin.json
 src/data/leads.json
+src/data/estimates.json
+src/data/estimates.json.tmp
+src/data/estimate-runs.json
+src/data/estimate-runs.json.tmp
+src/data/estimate-archive.json
+src/data/estimate-archive.json.tmp
+src/data/estimate-materials.json
+src/data/estimate-materials.json.tmp
+src/data/estimate-units.json
+src/data/estimate-units.json.tmp
 public/uploads/*
 !public/uploads/.gitkeep

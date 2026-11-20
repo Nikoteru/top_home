@@ -29,7 +29,7 @@ function ensureAdminFile() {
   saveAdmin({ username, passwordHash: hashPassword(password) });
 }
 
-function getAdmin() {
+function readAccounts() {
   ensureAdminFile();
   return JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
 }
@@ -38,19 +38,34 @@ function saveAdmin(data) {
   fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
 
+function getAdmin(role = 'admin') {
+  const accounts = readAccounts();
+  const account = role === 'superadmin' ? accounts.superadmin : accounts;
+  return account && { username: account.username };
+}
+
 function verifyLogin(username, password) {
-  const admin = getAdmin();
-  if (admin.username !== username) return false;
-  return verifyPassword(password, admin.passwordHash);
+  if (typeof username !== 'string' || typeof password !== 'string') return null;
+  const accounts = readAccounts();
+  if (accounts.username === username && verifyPassword(password, accounts.passwordHash)) return 'admin';
+  if (accounts.superadmin?.username === username && verifyPassword(password, accounts.superadmin.passwordHash)) {
+    return 'superadmin';
+  }
+  return null;
 }
 
 // currentPassword всегда обязателен и проверяется отдельно перед вызовом.
-function updateCredentials({ username, password }) {
-  const admin = getAdmin();
-  if (username && username.trim()) admin.username = username.trim();
-  if (password && password.trim()) admin.passwordHash = hashPassword(password);
-  saveAdmin(admin);
-  return admin;
+function updateCredentials(role, { username, password }) {
+  const accounts = readAccounts();
+  const isSuperadmin = role === 'superadmin';
+  const account = isSuperadmin ? accounts.superadmin : accounts;
+  const otherAccount = isSuperadmin ? accounts : accounts.superadmin;
+  const nextUsername = username.trim();
+  if (otherAccount?.username === nextUsername) return false;
+  account.username = nextUsername;
+  if (password) account.passwordHash = hashPassword(password);
+  saveAdmin(accounts);
+  return true;
 }
 
 module.exports = { getAdmin, verifyLogin, updateCredentials };

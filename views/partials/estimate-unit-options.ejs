@@ -1,0 +1,4 @@
+<% estimateUnits.forEach(function(unit) { %>
+  <% const text = unit.value + ' — ' + unit.label; %>
+  <option value="<%= unit.value %>" data-unit-label="<%= text %>"><%= text %></option>
+<% }); %>

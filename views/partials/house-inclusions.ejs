@@ -1,0 +1,36 @@
+<section class="house-inclusions house-inclusions--project" id="house-inclusions" aria-labelledby="house-inclusions-title" data-house-inclusions>
+  <h2 class="section-title section-title--left" id="house-inclusions-title"><%= inclusions.title %></h2>
+  <div class="house-inclusions__layout">
+    <div class="house-inclusions__tabs" aria-label="Этапы комплектации" data-inclusion-tabs hidden>
+      <% inclusions.sections.forEach(function(section, index) { %>
+        <button type="button" id="inclusion-tab-<%= index %>" aria-controls="inclusion-panel-<%= index %>" data-inclusion-tab>
+          <span class="house-inclusions__ordinal" aria-hidden="true"><%= index + 1 %></span>
+          <span class="house-inclusions__stage-title"><%= section.title %></span>
+        </button>
+      <% }); %>
+    </div>
+    <div class="house-inclusions__panels">
+      <% inclusions.sections.forEach(function(section, index) { %>
+        <section class="house-inclusions__panel" id="inclusion-panel-<%= index %>" aria-labelledby="inclusion-heading-<%= index %>">
+          <h3 id="inclusion-heading-<%= index %>"><%= section.title %></h3>
+          <% const firstDescription = section.items.findIndex((item) => item.description); %>
+          <ol class="house-inclusions__items" role="list">
+            <% section.items.forEach(function(item, itemIndex) { %>
+              <li>
+                <% if (item.description) { %>
+                  <details class="house-inclusions__item" name="inclusion-items-<%= index %>" <%= itemIndex === firstDescription ? 'open' : '' %>>
+                    <summary><span><%= itemIndex + 1 %>. <%= item.title %></span></summary>
+                    <p><%= item.description %></p>
+                  </details>
+                <% } else { %>
+                  <p class="house-inclusions__item house-inclusions__item--plain"><%= itemIndex + 1 %>. <%= item.title %></p>
+                <% } %>
+              </li>
+            <% }); %>
+          </ol>
+        </section>
+      <% }); %>
+    </div>
+    <% if (inclusions.note) { %><p class="house-inclusions__note"><%= inclusions.note %></p><% } %>
+  </div>
+</section>

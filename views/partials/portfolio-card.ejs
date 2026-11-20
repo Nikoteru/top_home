@@ -1,0 +1,14 @@
+<% const { cover, photos, illustrated } = portfolioMedia(item); const href = '/portfolio/' + encodeURIComponent(item.id); %>
+<article class="house-card portfolio-card">
+  <a href="<%= href %>" class="house-card__image<%= cover ? '' : ' house-card__image--empty' %>" aria-label="<%= item.title %>">
+    <% if (cover) { %><img src="<%= cover %>" alt="" loading="lazy"><% } else { %><span>Фото объекта пока нет</span><% } %>
+    <% if (illustrated) { %><span class="media-caption">Визуализация</span><% } %>
+    <% if (photos.length && !illustrated) { %><span class="portfolio-card__count"><%= photos.length %> фото</span><% } %>
+  </a>
+  <div class="house-card__body">
+    <h3><a href="<%= href %>" class="house-card__title-link"><%= item.title %></a></h3>
+    <% if (item.price) { %><div class="house-card__meta"><strong><%= item.price %></strong></div><% } %>
+    <% if (showAddress && item.address) { %><p class="portfolio-card__address"><%= item.address %></p><% } %>
+    <a href="<%= href %>" class="btn btn-outline">Смотреть объект</a>
+  </div>
+</article>

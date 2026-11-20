@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка — шаблоны смет</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'estimates', newRequestsCount }) %>
+
+  <main class="container admin-main">
+    <div class="admin-section-header admin-section-header--wide">
+      <h2 class="admin-section-title">Шаблоны смет</h2>
+      <div class="estimate-editor-links">
+        <a class="btn btn-outline btn-small" href="/admin/estimate-runs">К расчёту смет</a>
+        <a class="btn btn-accent btn-small" href="/admin/estimates/new">Создать шаблон</a>
+      </div>
+    </div>
+
+    <% if (!estimates.length) { %>
+      <p>Сохранённых шаблонов пока нет.</p>
+    <% } %>
+    <% estimates.forEach(function(estimate) { %>
+      <article class="admin-card estimate-list-item">
+        <h3><a href="/admin/estimates/<%= estimate.id %>"><%= estimate.title %></a></h3>
+      </article>
+    <% }); %>
+  </main>
+</body>
+</html>

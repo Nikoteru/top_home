@@ -38,7 +38,25 @@
       </div>
     </section>
 
-    <h2 class="admin-section-title">Блок «5 причин выбрать одноэтажный дом»</h2>
+    <section class="admin-card">
+      <h2>Заголовки блоков</h2>
+      <form method="POST" action="/admin/home/headings" class="admin-upload-form">
+        <label>Преимущества
+          <input type="text" name="advantages" value="<%= homeHeadings.advantages %>" required>
+        </label>
+        <label>Проекты на главной
+          <input type="text" name="projects" value="<%= homeHeadings.projects %>" required>
+        </label>
+        <label>Форма заявки
+          <input type="text" name="request" value="<%= homeHeadings.request %>" required>
+        </label>
+        <div class="admin-form-actions">
+          <button type="submit" class="btn btn-accent btn-small">Сохранить заголовки</button>
+        </div>
+      </form>
+    </section>
+
+    <h2 class="admin-section-title">Карточки преимуществ</h2>
     <div class="admin-houses-grid">
       <% content.advantages.forEach(function(adv) { %>
         <section class="admin-card">

@@ -1,0 +1,16 @@
+<% const { cover, illustrated } = projectMedia(house); const href = '/houses/' + encodeURIComponent(house.id); %>
+<article class="house-card">
+  <a href="<%= href %>" class="house-card__image" aria-label="<%= house.title %>">
+    <img src="<%= cover %>" alt="" loading="lazy">
+    <% if (illustrated) { %><span class="media-caption">Визуализация</span><% } %>
+  </a>
+  <div class="house-card__body">
+    <h3><a href="<%= href %>" class="house-card__title-link"><%= house.title %></a></h3>
+    <div class="house-card__meta">
+      <% if (house.area) { %><span><%= house.area %></span><% } %>
+      <% if (house.price) { %><strong><%= house.price %></strong><% } %>
+    </div>
+    <% if (showDescription && house.description) { %><p><%= house.description %></p><% } %>
+    <a href="<%= href %>" class="btn btn-outline">Узнать подробнее</a>
+  </div>
+</article>

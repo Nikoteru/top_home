@@ -41,6 +41,31 @@
     <div class="admin-houses-list" id="housePages">
       <% content.houses.forEach(function(house, i) { %>
         <section class="admin-card admin-house-card" data-house-id="<%= house.id %>" <%= i !== 0 ? 'hidden' : '' %>>
+          <div class="admin-house-config">
+            <a href="/admin/house/<%= encodeURIComponent(house.id) %>/inclusions" class="btn btn-outline btn-small">Настроить «Что входит в стоимость»</a>
+          </div>
+          <section class="admin-house-estimate" aria-labelledby="house-estimate-<%= house.id %>">
+            <div class="admin-house-estimate__header">
+              <h3 id="house-estimate-<%= house.id %>">Привязка расчёта сметы</h3>
+              <a class="btn btn-outline btn-small" href="/admin/house/<%= encodeURIComponent(house.id) %>/presentation.zip">Скачать презентацию</a>
+            </div>
+            <% const linkedRun = estimateRuns.find((run) => run.id === house.estimateRunId); %>
+            <% if (estimateRuns.length || house.estimateRunId) { %>
+              <form method="POST" action="/admin/house/<%= house.id %>/estimate" class="admin-upload-form admin-house-estimate__form">
+                <%- include('../partials/admin-house-estimate', { estimateRuns, selectedRunId: house.estimateRunId }) %>
+                <div class="admin-form-actions">
+                  <button type="submit" class="btn btn-accent btn-small">Закрепить расчёт</button>
+                  <% if (linkedRun) { %>
+                    <a class="btn btn-outline btn-small" href="/admin/estimate-runs/<%= encodeURIComponent(linkedRun.id) %>">Открыть расчёт</a>
+                  <% } %>
+                </div>
+              </form>
+            <% } %>
+            <% if (!estimateRuns.length) { %>
+              <p class="field-hint">Сохраните расчёт, чтобы выбрать его для проекта.</p>
+              <a class="btn btn-outline btn-small" href="/admin/estimate-runs">Перейти к расчётам</a>
+            <% } %>
+          </section>
           <div class="admin-card__row">
             <img class="admin-preview admin-preview--house" src="<%= house.image %>" alt="<%= house.title %>">
             <form method="POST" action="/admin/house/<%= house.id %>" enctype="multipart/form-data" class="admin-upload-form">
@@ -127,6 +152,7 @@
               <input type="text" name="price" placeholder="от 5 000 000 ₽">
             </label>
           </div>
+          <%- include('../partials/admin-house-estimate', { estimateRuns, selectedRunId: undefined }) %>
           <label>Короткое описание <span class="field-hint">(в карточке на главной)</span>
             <textarea name="description" rows="2" placeholder="Короткое описание проекта"></textarea>
           </label>

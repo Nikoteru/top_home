@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Админка — справочник калькулятора</title>
+  <title>Админка — справочник</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body class="admin-body">
@@ -23,11 +23,23 @@
     <% } %>
 
     <div class="admin-section-header">
-      <h2 class="admin-section-title">Справочник калькулятора</h2>
+      <h2 class="admin-section-title">Справочник</h2>
       <a href="/admin/calculator" class="btn btn-outline btn-small">Общие настройки</a>
     </div>
 
-    <h3 class="calc-admin-subtitle">Блоки выбора</h3>
+    <% if (isSuperadmin) { %>
+      <section class="admin-card" id="estimate-units">
+        <h3 id="estimate-units-title">Справочник единиц измерений</h3>
+        <div class="estimate-unit-list" tabindex="0" role="region" aria-labelledby="estimate-units-title">
+          <% estimateUnits.forEach(function(unit) { %>
+            <%- include('../partials/estimate-unit-form', { unit }) %>
+          <% }); %>
+        </div>
+        <%- include('../partials/estimate-unit-form', { unit: { label: '', value: '' } }) %>
+      </section>
+    <% } %>
+
+    <h3 class="calc-admin-subtitle">Блоки калькулятора</h3>
 
     <% calc.blocks.forEach(function(block, bi) { var options = block.options || []; %>
       <section class="admin-card calc-admin-block" id="calc-block-<%= block.id %>">

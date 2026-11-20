@@ -1,0 +1,9 @@
+<form method="POST" action="/admin/estimates/units<%= unit.id ? '/' + unit.id : '' %>" class="admin-upload-form estimate-unit-form">
+  <label>Название
+    <input type="text" name="label" value="<%= unit.label %>" required>
+  </label>
+  <label>Обозначение
+    <input type="text" name="value" value="<%= unit.value %>" required>
+  </label>
+  <button class="btn btn-small <%= unit.id ? 'btn-outline' : 'btn-accent' %>" type="submit"><%= unit.id ? 'Сохранить' : 'Добавить единицу' %></button>
+</form>

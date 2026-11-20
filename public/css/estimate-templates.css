@@ -1,0 +1,23 @@
+.estimate-template-help { margin: 0; color: var(--text-muted); font-size: 14px; }
+.estimate-template .estimate-table { min-width: 960px; }
+.estimate-template-divider td { padding: 0; }
+
+.estimate-template .is-base-cell { background: #e9f0fb; font-weight: 700; }
+.estimate-template input[data-cell-formula] { font-family: ui-monospace, Consolas, monospace; }
+.estimate-template input[data-cell-formula][hidden] { display: none; }
+.estimate-template .estimate-base-toggle {
+  flex-direction: row;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 8px;
+  color: inherit;
+  font-size: 12px;
+  font-weight: inherit;
+}
+.estimate-base-toggle input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--sheet-focus);
+}

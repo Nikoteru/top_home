@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Индивидуальное проектирование — Топ5Домов</title>
+  <meta name="description" content="Индивидуальное проектирование загородных домов. Планировка, фасады, рабочие чертежи и смета с учётом вашего участка и бюджета.">
+  <%- include('partials/public-styles') %>
+  <link rel="stylesheet" href="/css/individual-planning.css">
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <main class="individual-page">
+    <section class="individual-hero" aria-labelledby="individual-title">
+      <div class="container">
+        <nav class="breadcrumb" aria-label="Путь к странице">
+          <a href="/">Главная</a> <span aria-hidden="true">/</span>
+          <span aria-current="page">Индивидуальное проектирование</span>
+        </nav>
+        <div class="individual-hero__layout">
+          <div class="individual-hero__copy">
+            <h1 id="individual-title">Индивидуальное проектирование</h1>
+            <p>Спроектируем загородный дом под ваш участок, привычки семьи и бюджет. От первого эскиза до рабочих чертежей и сметы.</p>
+            <div class="individual-hero__actions">
+              <a class="btn btn-accent" href="#form">Обсудить проект</a>
+              <a class="individual-link" href="#design-process">Этапы проектирования <span aria-hidden="true">↓</span></a>
+            </div>
+          </div>
+          <figure class="individual-hero__figure">
+            <img src="/images/individual-house.webp" alt="Одноэтажный дом с деревянным фасадом и крытой террасой" width="1400" height="933" fetchpriority="high">
+            <figcaption>Архитектурная визуализация</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="container individual-section" aria-labelledby="design-scope-title">
+      <h2 id="design-scope-title">Что учтём в проекте</h2>
+      <div class="individual-scope">
+        <div>
+          <h3>Особенности участка</h3>
+          <p>Выберем расположение дома с учётом рельефа, подъезда, сторон света и видов из окон.</p>
+        </div>
+        <div>
+          <h3>Планировка дома</h3>
+          <p>Продумаем количество комнат, места для хранения и удобные выходы на террасу и участок.</p>
+        </div>
+        <div>
+          <h3>Архитектура и материалы</h3>
+          <p>Подберём форму дома, отделку фасадов и остекление. Покажем объём и пропорции на 3D-модели.</p>
+        </div>
+        <div>
+          <h3>Бюджет строительства</h3>
+          <p>Обсудим желаемый бюджет и учтём его при выборе площади, материалов и технологии строительства.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="individual-approach" aria-labelledby="design-approach-title">
+      <div class="container individual-approach__layout">
+        <img src="/images/individual-studio.webp" alt="Макет деревянного дома и планировка на столе архитектора" width="1000" height="750" loading="lazy">
+        <div>
+          <h2 id="design-approach-title">Проект по вашему эскизу</h2>
+          <p>Принесите рисунок, подборку фотографий или понравившийся проект. На встрече с архитектором разберём, какие решения подходят вашей семье и участку.</p>
+          <a class="individual-link" href="/portfolio">Смотреть портфолио <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="container individual-section" id="design-process" aria-labelledby="design-process-title">
+      <h2 id="design-process-title">Как проходит проектирование</h2>
+      <ol class="individual-steps" role="list">
+        <li>
+          <h3>Знакомство и бриф</h3>
+          <p>Обсуждаем пожелания, исходные данные участка, ориентировочную площадь и бюджет.</p>
+        </li>
+        <li>
+          <h3>Эскиз и планировка</h3>
+          <p>Предлагаем расположение дома на участке и согласовываем план комнат и террас.</p>
+        </li>
+        <li>
+          <h3>Фасады и 3D-модель</h3>
+          <p>Уточняем внешний вид, форму крыши, отделку и размеры окон.</p>
+        </li>
+        <li>
+          <h3>Чертежи и смета</h3>
+          <p>После согласования готовим рабочую документацию и смету для строительства.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="container individual-contact" id="form" aria-labelledby="design-contact-title">
+      <div class="individual-contact__layout">
+        <div>
+          <h2 id="design-contact-title">Узнайте стоимость проектирования</h2>
+          <p>Оставьте контакты и укажите площадь дома, если она уже известна. Свяжемся с вами, чтобы обсудить задачу и подготовить расчёт.</p>
+        </div>
+        <form class="individual-form" action="/request" method="POST" data-lead-form>
+          <input type="hidden" name="returnTo" value="/individual-planning">
+          <div class="individual-form__fields">
+            <label>Имя
+              <input type="text" name="name" autocomplete="name" required>
+            </label>
+            <label>Площадь дома, м²
+              <input type="text" name="area" inputmode="decimal" maxlength="20" pattern="[0-9]+([.,][0-9]+)?" placeholder="Например, 150" <%- areaError ? 'aria-invalid="true"' : '' %>>
+            </label>
+            <label>Телефон
+              <input type="tel" name="phone" placeholder="+7 (___) ___-__-__" autocomplete="tel" aria-describedby="individual-form-hint">
+            </label>
+            <label>E-mail
+              <input type="email" name="email" autocomplete="email" aria-describedby="individual-form-hint">
+            </label>
+          </div>
+          <p class="individual-form__hint" id="individual-form-hint" data-form-hint aria-live="polite">Укажите телефон или e-mail.</p>
+          <% if (sent) { %>
+            <p class="individual-form__status" role="status">Заявка отправлена. Мы свяжемся с вами по указанным контактам.</p>
+          <% } %>
+          <% if (formError || areaError) { %>
+            <p class="individual-form__status individual-form__status--error" role="alert"><%= areaError ? 'Укажите площадь дома больше нуля.' : 'Укажите имя и проверьте телефон или e-mail.' %></p>
+          <% } %>
+          <button class="btn btn-accent" type="submit">Отправить заявку</button>
+          <p class="individual-form__note">Нажимая кнопку, вы соглашаетесь с обработкой персональных данных.</p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <%- include('partials/footer') %>
+  <script src="/js/form-validation.js"></script>
+</body>
+</html>

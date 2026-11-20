@@ -1,0 +1,8 @@
+<label>Сохранённый расчёт
+  <select name="estimateRunId">
+    <option value="">Без расчёта</option>
+    <% for (const run of estimateRuns) { %>
+      <option value="<%= run.id %>" <%= run.id === selectedRunId ? 'selected' : '' %>><%= run.title %></option>
+    <% } %>
+  </select>
+</label>

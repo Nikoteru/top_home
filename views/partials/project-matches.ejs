@@ -3,9 +3,11 @@
   <% if (matches.length) { %>
     <div class="calc-projects-list">
       <% matches.forEach(function(house) { %>
+        <% const { cover, illustrated } = projectMedia(house); %>
         <article class="calc-project" data-project-id="<%= house.id %>">
           <a href="/houses/<%= encodeURIComponent(house.id) %>" class="calc-project__image" tabindex="-1" aria-hidden="true">
-            <img src="<%= house.image %>" alt="" loading="lazy">
+            <img src="<%= cover %>" alt="" loading="lazy">
+            <% if (illustrated) { %><span class="media-caption">Визуализация</span><% } %>
           </a>
           <div class="calc-project__body">
             <h3><a href="/houses/<%= encodeURIComponent(house.id) %>"><%= house.title %></a></h3>

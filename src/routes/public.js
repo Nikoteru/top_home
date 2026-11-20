@@ -1,11 +1,16 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { getContent } = require('../data/store');
+const { getHomeHeadings } = require('../data/homeHeadings');
 const { addLead } = require('../data/leadsStore');
 const { isValidRuPhone, isValidEmail, formatRuPhone } = require('../utils/validate');
 const { getAreaLimits, normalizeProjectFilters, matchProjects, describeProjectFilters } = require('../utils/projectMatcher');
 const { ICONS } = require('../data/calcIcons');
 const { getHouseSpecs } = require('../utils/houseParameters');
+const { getHouseInclusions } = require('../utils/houseInclusions');
+const { availableImage, publicPhotos, projectMedia, portfolioMedia } = require('../utils/publicMedia');
+
+const individualPlanningPath = '/individual-planning';
 
 // В заявку попадают диапазон площади и существующие варианты параметров.
 function calcDetailsFromRequest(raw, content) {
@@ -19,7 +24,25 @@ function calcDetailsFromRequest(raw, content) {
   }
 }
 
+function individualPlanningDetails(raw = '') {
+  if (typeof raw !== 'string') return null;
+  const area = raw.trim();
+  if (!area) return 'Индивидуальное проектирование';
+
+  const squareMetres = Number(area.replace(',', '.'));
+  if (area.length > 20 || !/^\d+(?:[.,]\d+)?$/.test(area) || !Number.isFinite(squareMetres) || squareMetres <= 0) {
+    return null;
+  }
+  return `Индивидуальное проектирование · Площадь дома ${area.replace('.', ',')} м²`;
+}
+
 const router = express.Router();
+
+router.use((req, res, next) => {
+  res.locals.projectMedia = projectMedia;
+  res.locals.portfolioMedia = portfolioMedia;
+  next();
+});
 
 // Ограничиваем частоту отправки заявок с одного IP — форма публичная,
 // без этого её легко завалить спамом.
@@ -36,9 +59,13 @@ router.get('/', (req, res) => {
   // На главную попадают только дома с галочкой «Показывать на главной».
   // У старых записей поля нет — считаем их показанными, как было раньше.
   const homeHouses = content.houses.filter((h) => h.showOnHome !== false);
+  const illustratedHero = !availableImage(content.hero.image) || content.hero.image === '/images/placeholder-hero.svg';
   res.render('index', {
     content,
+    homeHeadings: getHomeHeadings(content),
     homeHouses,
+    illustratedHero,
+    advantages: content.advantages.map((item) => ({ ...item, image: availableImage(item.image) ? item.image : null })),
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
   });
@@ -88,6 +115,16 @@ router.get('/projects', (req, res) => {
   });
 });
 
+router.get(individualPlanningPath, (req, res) => {
+  res.render('individual-planning', {
+    content: getContent(),
+    activePage: 'individual-planning',
+    sent: req.query.sent === '1',
+    formError: req.query.error === '1',
+    areaError: req.query.error === 'area',
+  });
+});
+
 // Портфолио: реализованные объекты с фото, описанием, стоимостью и адресом.
 router.get('/portfolio', (req, res) => {
   const content = getContent();
@@ -109,7 +146,7 @@ router.get('/portfolio/:id', (req, res) => {
   res.render('portfolio-item', {
     content,
     item,
-    photos: item.photos || [],
+    media: portfolioMedia(item),
     mapEmbedUrl: item.address ? `https://www.google.com/maps?q=${query}&output=embed` : null,
     mapLinkUrl: item.address ? `https://www.google.com/maps/search/?api=1&query=${query}` : null,
     otherItems: items.filter((p) => p !== item).slice(0, 3),
@@ -160,7 +197,7 @@ router.get('/stages', (req, res) => {
   const content = getContent();
   res.render('stages', {
     content,
-    stages: content.stages || [],
+    stages: (content.stages || []).map((stage) => ({ ...stage, photos: publicPhotos(stage.photos) })),
     activePage: 'stages',
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
@@ -177,8 +214,10 @@ router.get('/houses/:id', (req, res) => {
   res.render('house', {
     content,
     house,
+    media: projectMedia(house),
     otherHouses,
     specs: getHouseSpecs(house, content.calculator),
+    inclusions: getHouseInclusions(house, content.stages),
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
   });
@@ -207,11 +246,16 @@ router.post('/request', requestLimiter, (req, res) => {
     return res.redirect(`${target}?error=1#form`);
   }
 
+  const details = target === individualPlanningPath
+    ? individualPlanningDetails(req.body.area)
+    : calcDetailsFromRequest(req.body.calc, getContent());
+  if (details === null) return res.redirect(`${target}?error=area#form`);
+
   addLead({
     name: trimmedName,
     phone: trimmedPhone ? formatRuPhone(trimmedPhone) : '',
     email: trimmedEmail,
-    details: calcDetailsFromRequest(req.body.calc, getContent()),
+    details,
   });
   res.redirect(`${target}?sent=1#form`);
 });

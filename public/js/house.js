@@ -1,16 +1,20 @@
 // Переключение главного фото по клику на миниатюру + лайтбокс с увеличением.
 document.addEventListener('DOMContentLoaded', () => {
   const main = document.getElementById('galleryMain');
+  const mainImage = main?.querySelector('img');
   const thumbs = document.querySelectorAll('.gallery-thumb');
   const images = Array.isArray(window.HOUSE_GALLERY) ? window.HOUSE_GALLERY : [];
-  if (!main || images.length === 0) return;
+  if (!mainImage || images.length === 0) return;
 
   let currentIndex = 0;
 
   function setMainImage(index) {
     currentIndex = index;
-    main.style.backgroundImage = `url('${images[index]}')`;
-    thumbs.forEach((t, i) => t.classList.toggle('is-active', i === index));
+    mainImage.src = images[index];
+    thumbs.forEach((thumb, i) => {
+      thumb.classList.toggle('is-active', i === index);
+      thumb.setAttribute('aria-pressed', String(i === index));
+    });
   }
 
   thumbs.forEach((thumb, i) => {

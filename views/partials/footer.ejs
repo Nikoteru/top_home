@@ -7,11 +7,12 @@
     <div class="footer-col">
       <h4>Разделы</h4>
       <a href="/projects">Все проекты</a>
+      <a href="/individual-planning">Индивидуальное проектирование</a>
       <a href="/portfolio">Портфолио</a>
       <a href="/stages">Этапы стройки</a>
       <a href="/calculator">Подбор проекта</a>
       <a href="/#advantages">Преимущества</a>
-      <a href="#form">Оставить заявку</a>
+      <a href="<%= typeof formTarget === 'undefined' ? '#form' : formTarget %>">Оставить заявку</a>
     </div>
     <div class="footer-col">
       <h4>Контакты</h4>

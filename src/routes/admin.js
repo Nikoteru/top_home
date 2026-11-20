@@ -4,13 +4,29 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const ExcelJS = require('exceljs');
+const JSZip = require('jszip');
 const rateLimit = require('express-rate-limit');
 const { getContent, saveContent } = require('../data/store');
+const { DEFAULT_HOME_HEADINGS, getHomeHeadings } = require('../data/homeHeadings');
 const { getLeads, updateLeadStatus, updateLeadComment, deleteLead } = require('../data/leadsStore');
 const { getAdmin, verifyLogin, updateCredentials } = require('../data/adminStore');
+const {
+  getEstimates, saveEstimate, getEstimateRuns, saveEstimateRun, getEstimateUnits, saveEstimateUnit,
+} = require('../data/estimatesStore');
+const {
+  EstimateValidationError, normalizeEstimateUnit, normalizeEstimateTemplate, asEstimateTemplate, getEstimateEditorDraft,
+  normalizeEstimateRun,
+} = require('../utils/estimates');
+const { buildEstimateWorkbook } = require('../utils/estimateWorkbook');
+const { buildProjectPdf } = require('../utils/projectPresentation');
+const { formatTotal } = require('../../public/js/estimate-totals');
+const { isBaseCell } = require('../../public/js/estimate-formulas');
 const { requireAuth } = require('../middleware/auth');
 const { ICONS, DEFAULT_ICON } = require('../data/calcIcons');
 const { normalizeHouseParameters, getHouseParameterFields } = require('../utils/houseParameters');
+const {
+  HouseInclusionsError, getHouseInclusions, normalizeHouseInclusions, updateHouseInclusionStage,
+} = require('../utils/houseInclusions');
 
 const STATUS_LABELS = { new: 'Новая', completed: 'Выполнена', rejected: 'Отклонена' };
 
@@ -43,6 +59,11 @@ function nextHouseId(houses) {
   return houses.reduce((max, h) => Math.max(max, Number(h.id) || 0), 0) + 1;
 }
 
+function attachmentName(prefix, title, extension) {
+  const safeTitle = Array.from(title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')).slice(0, 100).join('').trim();
+  return `${prefix} — ${Buffer.from(safeTitle).toString('utf8')}.${extension}`;
+}
+
 // Характеристики дома редактируются одним textarea — по строке на пункт,
 // в формате "Метка: Значение". Так проще, чем городить динамическую форму.
 function parseSpecs(text) {
@@ -65,6 +86,176 @@ function serializeSpecs(specs) {
 }
 
 const router = express.Router();
+
+router.use((req, res, next) => {
+  res.locals.isSuperadmin = req.session?.isAdmin === true && req.session.adminRole === 'superadmin';
+  next();
+});
+
+router.use('/estimates', requireAuth, (req, res, next) => {
+  if (!res.locals.isSuperadmin) return res.sendStatus(403);
+  next();
+});
+
+router.get('/estimates', (req, res) => {
+  const estimates = getEstimates().map(({ id, title }) => ({ id, title }));
+  res.render('admin/estimates', { estimates, newRequestsCount: countNewLeads() });
+});
+
+function renderEstimateEditor(req, res, estimate) {
+  const constructionStages = getContent().stages || [];
+  res.render('admin/estimate-editor', {
+    estimate: getEstimateEditorDraft(estimate, constructionStages),
+    constructionStages,
+    estimateUnits: getEstimateUnits(),
+    saved: req.query.saved === '1',
+    newRequestsCount: countNewLeads(),
+  });
+}
+
+router.get('/estimates/new', (req, res) => {
+  renderEstimateEditor(req, res, { title: '', stages: [] });
+});
+
+router.get('/estimates/:id', (req, res) => {
+  const estimate = getEstimates().find((entry) => entry.id === req.params.id);
+  if (!estimate) return res.sendStatus(404);
+  renderEstimateEditor(req, res, estimate);
+});
+
+function persistEstimate(req, res) {
+  const existing = req.params.id && getEstimates().find((estimate) => estimate.id === req.params.id);
+  if (req.params.id && !existing) return res.status(404).json({ error: 'Шаблон не найден.' });
+  let values;
+  try {
+    values = normalizeEstimateTemplate(req.body, existing, getContent().stages || []);
+  } catch (error) {
+    if (!(error instanceof EstimateValidationError)) throw error;
+    return res.status(422).json({ error: error.message });
+  }
+
+  const result = saveEstimate(req.params.id, req.body.revision, values);
+  if (result.status === 404) return res.status(404).json({ error: 'Шаблон не найден.' });
+  if (result.duplicateTitle) {
+    return res.status(409).json({ error: 'Шаблон с таким названием уже существует.' });
+  }
+  if (result.status === 409) {
+    return res.status(409).json({
+      error: 'Шаблон уже изменён в другой вкладке. Откройте актуальную версию перед повторным сохранением.',
+    });
+  }
+  res.status(req.params.id ? 200 : 201).json({ url: `/admin/estimates/${result.id}?saved=1` });
+}
+
+function persistEstimateUnit(req, res) {
+  let unit;
+  try {
+    unit = normalizeEstimateUnit(req.body);
+  } catch (error) {
+    if (!(error instanceof EstimateValidationError)) throw error;
+    return renderPageError(req, res, 'calculatorDirectory', error.message);
+  }
+  const status = saveEstimateUnit(req.params.id, unit);
+  if (status === 404) return res.sendStatus(404);
+  if (status === 409) return renderPageError(req, res, 'calculatorDirectory', 'Такое обозначение уже есть в справочнике.');
+  res.redirect('/admin/calculator/directory?saved=1#estimate-units');
+}
+
+router.post('/estimates/units', persistEstimateUnit);
+router.post('/estimates/units/:id', persistEstimateUnit);
+router.post('/estimates', persistEstimate);
+router.post('/estimates/:id', persistEstimate);
+
+router.use('/estimate-runs', requireAuth);
+
+router.get('/estimate-runs', (req, res) => {
+  const templates = getEstimates().map(({ id, title }) => ({ id, title }));
+  const runs = getEstimateRuns().map(({ id, title, totalCents }) => ({
+    id, title, total: formatTotal(BigInt(totalCents)),
+  }));
+  res.render('admin/estimate-runs', { templates, runs, newRequestsCount: countNewLeads() });
+});
+
+function renderEstimateRun(req, res, template, run) {
+  res.render('admin/estimate-run-editor', {
+    template,
+    run,
+    isBaseCell,
+    saved: req.query.saved === '1',
+    newRequestsCount: countNewLeads(),
+  });
+}
+
+router.get('/estimate-runs/new', (req, res) => {
+  const template = getEstimates().find((entry) => entry.id === req.query.template);
+  if (!template) return res.sendStatus(404);
+  const prepared = asEstimateTemplate(template);
+  renderEstimateRun(req, res, prepared, { title: '', entries: {} });
+});
+
+router.get('/estimate-runs/:id/export.xlsx', async (req, res, next) => {
+  try {
+    const run = getEstimateRuns().find((entry) => entry.id === req.params.id);
+    if (!run) return res.sendStatus(404);
+    const workbook = buildEstimateWorkbook(run);
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.set('Cache-Control', 'private, no-store');
+    res.attachment(attachmentName('Смета', run.title, 'xlsx'));
+    return res.send(buffer);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/estimate-runs/:id', (req, res) => {
+  const run = getEstimateRuns().find((entry) => entry.id === req.params.id);
+  if (!run) return res.sendStatus(404);
+  renderEstimateRun(req, res, run.template, run);
+});
+
+function persistEstimateRun(req, res) {
+  const draft = req.body;
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
+    return res.status(422).json({ error: 'Проверьте структуру данных сметы.' });
+  }
+  const allowedFields = req.params.id
+    ? ['title', 'entries', 'revision']
+    : ['title', 'entries', 'templateId', 'templateRevision'];
+  if (Object.keys(draft).some((field) => !allowedFields.includes(field))) {
+    return res.status(422).json({ error: 'В расчёте можно менять название и значения базовых ячеек.' });
+  }
+
+  const existing = req.params.id && getEstimateRuns().find((entry) => entry.id === req.params.id);
+  if (req.params.id && !existing) return res.status(404).json({ error: 'Смета не найдена.' });
+  const template = existing?.template || getEstimates().find((entry) => entry.id === draft.templateId);
+  if (!template) return res.status(404).json({ error: 'Шаблон не найден.' });
+  if (!existing && template.revision !== draft.templateRevision) {
+    return res.status(409).json({ error: 'Шаблон изменился. Откройте смету по актуальной версии шаблона.' });
+  }
+
+  let values;
+  try {
+    const prepared = asEstimateTemplate(template);
+    values = {
+      template: prepared,
+      ...normalizeEstimateRun(draft, prepared),
+    };
+  } catch (error) {
+    if (!(error instanceof EstimateValidationError)) throw error;
+    return res.status(422).json({ error: error.message });
+  }
+
+  const result = saveEstimateRun(req.params.id, draft.revision, values);
+  if (result.status === 404) return res.status(404).json({ error: 'Смета не найдена.' });
+  if (result.duplicateTitle) {
+    return res.status(409).json({ error: 'Расчёт с таким названием уже существует.' });
+  }
+  if (result.status === 409) return res.status(409).json({ error: 'Смета уже изменена в другой вкладке.' });
+  res.status(req.params.id ? 200 : 201).json({ url: `/admin/estimate-runs/${result.id}?saved=1` });
+}
+
+router.post('/estimate-runs', persistEstimateRun);
+router.post('/estimate-runs/:id', persistEstimateRun);
 
 // Расширение сохранённого файла берём из проверенного MIME-типа, а не из
 // имени файла, которое прислал браузер — оно полностью подконтрольно
@@ -108,13 +299,17 @@ router.get('/login', (req, res) => {
   res.render('admin/login', { error: null });
 });
 
-router.post('/login', loginLimiter, (req, res) => {
+router.post('/login', loginLimiter, (req, res, next) => {
   const { username, password } = req.body;
-  if (username && password && verifyLogin(username, password)) {
-    req.session.isAdmin = true;
+  const role = verifyLogin(username, password);
+  if (role) {
     const redirectTo = req.session.redirectTo || '/admin';
-    delete req.session.redirectTo;
-    return res.redirect(redirectTo);
+    return req.session.regenerate((error) => {
+      if (error) return next(error);
+      req.session.isAdmin = true;
+      req.session.adminRole = role;
+      res.redirect(redirectTo);
+    });
   }
   res.status(401).render('admin/login', { error: 'Неверный логин или пароль' });
 });
@@ -142,8 +337,12 @@ const CONTENT_PAGES = {
 };
 
 function renderContentPage(req, res, page, { error = null, status = 200 } = {}) {
+  const content = getContent();
   res.status(status).render(CONTENT_PAGES[page], {
-    content: getContent(),
+    content,
+    estimateUnits: page === 'calculatorDirectory' && res.locals.isSuperadmin ? getEstimateUnits() : [],
+    estimateRuns: page === 'houses' ? getEstimateRuns().map(({ id, title }) => ({ id, title })) : [],
+    homeHeadings: getHomeHeadings(content),
     saved: !error && req.query.saved === '1',
     error,
     newRequestsCount: countNewLeads(),
@@ -155,6 +354,20 @@ function renderContentPage(req, res, page, { error = null, status = 200 } = {}) 
 router.get('/', requireAuth, (req, res) => res.redirect('/admin/houses'));
 router.get('/houses', requireAuth, (req, res) => renderContentPage(req, res, 'houses'));
 router.get('/home', requireAuth, (req, res) => renderContentPage(req, res, 'home'));
+router.post('/home/headings', requireAuth, (req, res) => {
+  const headings = Object.entries(DEFAULT_HOME_HEADINGS).map(([key]) => {
+    const value = req.body?.[key];
+    return [key, typeof value === 'string' ? value.trim() : ''];
+  });
+  if (headings.some(([, value]) => !value)) {
+    return renderPageError(req, res, 'home', 'Заполните все заголовки блоков.');
+  }
+
+  const content = getContent();
+  content.homeHeadings = Object.fromEntries(headings);
+  saveContent(content);
+  res.redirect('/admin/home?saved=1');
+});
 router.get('/contacts', requireAuth, (req, res) => renderContentPage(req, res, 'contacts'));
 router.get('/portfolio', requireAuth, (req, res) => renderContentPage(req, res, 'portfolio'));
 router.get('/stages', requireAuth, (req, res) => renderContentPage(req, res, 'stages'));
@@ -233,7 +446,7 @@ router.get('/requests/export.xlsx', requireAuth, async (req, res, next) => {
 // ---- Настройки: смена логина и пароля администратора ----
 
 router.get('/settings', requireAuth, (req, res) => {
-  const admin = getAdmin();
+  const admin = getAdmin(req.session.adminRole);
   res.render('admin/settings', {
     username: admin.username,
     error: null,
@@ -244,7 +457,8 @@ router.get('/settings', requireAuth, (req, res) => {
 
 router.post('/settings/credentials', requireAuth, (req, res) => {
   const { currentPassword, newUsername, newPassword, newPasswordConfirm } = req.body;
-  const admin = getAdmin();
+  const role = req.session.adminRole || 'admin';
+  const admin = getAdmin(role);
 
   function fail(message) {
     res.status(400).render('admin/settings', {
@@ -255,15 +469,15 @@ router.post('/settings/credentials', requireAuth, (req, res) => {
     });
   }
 
-  if (!currentPassword || !verifyLogin(admin.username, currentPassword)) {
+  if (verifyLogin(admin.username, currentPassword) !== role) {
     return fail('Текущий пароль указан неверно');
   }
-  if (!newUsername || !newUsername.trim()) {
+  if (typeof newUsername !== 'string' || !newUsername.trim()) {
     return fail('Логин не может быть пустым');
   }
   const wantsPasswordChange = newPassword || newPasswordConfirm;
   if (wantsPasswordChange) {
-    if (newPassword !== newPasswordConfirm) {
+    if (typeof newPassword !== 'string' || newPassword !== newPasswordConfirm) {
       return fail('Новый пароль и подтверждение не совпадают');
     }
     if (newPassword.length < 8) {
@@ -271,10 +485,11 @@ router.post('/settings/credentials', requireAuth, (req, res) => {
     }
   }
 
-  updateCredentials({
+  const updated = updateCredentials(role, {
     username: newUsername,
     password: wantsPasswordChange ? newPassword : undefined,
   });
+  if (!updated) return fail('Этот логин уже занят');
   res.redirect('/admin/settings?saved=1');
 });
 
@@ -339,15 +554,105 @@ router.post('/contacts', requireAuth, (req, res) => {
   res.redirect('/admin/contacts?saved=1');
 });
 
+function isValidEstimateRunSelection(id) {
+  return id === undefined || id === ''
+    || (typeof id === 'string' && getEstimateRuns().some((run) => run.id === id));
+}
+
+function setHouseEstimateRun(house, id) {
+  if (id === '') delete house.estimateRunId;
+  else if (id !== undefined) house.estimateRunId = id;
+}
+
+router.get('/house/:id/presentation.zip', requireAuth, async (req, res, next) => {
+  try {
+    const content = getContent();
+    const house = content.houses.find((entry) => String(entry.id) === req.params.id);
+    if (!house) return res.sendStatus(404);
+
+    const run = house.estimateRunId && getEstimateRuns().find((entry) => entry.id === house.estimateRunId);
+    if (house.estimateRunId && !run) {
+      return renderContentPage(req, res, 'houses', {
+        error: 'Закреплённый расчёт не найден. Выберите сохранённый расчёт в карточке проекта.',
+        status: 409,
+      });
+    }
+
+    const [pdf, estimate] = await Promise.all([
+      buildProjectPdf(house, content.calculator, PUBLIC_DIR, content.stages),
+      run ? buildEstimateWorkbook(run).xlsx.writeBuffer() : null,
+    ]);
+    const zip = new JSZip();
+    zip.file('Презентация.pdf', pdf);
+    if (estimate) zip.file('Смета.xlsx', estimate);
+    const archive = await zip.generateAsync({ type: 'nodebuffer' });
+
+    res.set('Cache-Control', 'private, no-store');
+    res.attachment(attachmentName('Презентация', house.title, 'zip'));
+    return res.send(archive);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/house/:id/estimate', requireAuth, (req, res) => {
+  const content = getContent();
+  const house = content.houses.find((entry) => String(entry.id) === req.params.id);
+  if (!house) return renderPageError(req, res, 'houses', 'Дом не найден');
+
+  const id = req.body?.estimateRunId;
+  if (typeof id !== 'string' || !isValidEstimateRunSelection(id)) {
+    return renderPageError(req, res, 'houses', 'Выберите сохранённый расчёт или пункт «Без расчёта».');
+  }
+
+  setHouseEstimateRun(house, id);
+  saveContent(content);
+  res.redirect(`/admin/houses?saved=1&open=${encodeURIComponent(house.id)}`);
+});
+
+router.get('/house/:id/inclusions', requireAuth, (req, res) => {
+  const { houses, stages } = getContent();
+  const house = houses.find((entry) => String(entry.id) === req.params.id);
+  if (!house) return res.sendStatus(404);
+
+  res.render('admin/house-inclusions', {
+    house,
+    stages: stages || [],
+    inclusions: getHouseInclusions(house, stages),
+    saved: req.query.saved === '1',
+    newRequestsCount: countNewLeads(),
+  });
+});
+
+router.post('/house/:id/inclusions', requireAuth, (req, res) => {
+  const content = getContent();
+  const house = content.houses.find((entry) => String(entry.id) === req.params.id);
+  if (!house) return res.status(404).json({ error: 'Проект не найден.' });
+
+  try {
+    house.inclusions = normalizeHouseInclusions(req.body, content.stages || [], house);
+  } catch (error) {
+    if (!(error instanceof HouseInclusionsError)) throw error;
+    return res.status(422).json({ error: error.message });
+  }
+
+  saveContent(content);
+  res.json({ url: `/admin/house/${encodeURIComponent(house.id)}/inclusions?saved=1` });
+});
+
 // Добавление нового дома
 router.post('/house', requireAuth, (req, res) => {
   upload.single('image')(req, res, (err) => {
     if (err) return renderPageError(req, res, 'houses', err.message);
 
-    const { title, area, price, description, fullDescription, specs } = req.body;
+    const { title, area, price, description, fullDescription, specs, estimateRunId } = req.body;
     if (!title || !title.trim()) {
       if (req.file) deleteUploadedImage(`/uploads/${req.file.filename}`);
       return renderPageError(req, res, 'houses', 'Укажите название дома');
+    }
+    if (!isValidEstimateRunSelection(estimateRunId)) {
+      if (req.file) deleteUploadedImage(`/uploads/${req.file.filename}`);
+      return renderPageError(req, res, 'houses', 'Выбранный расчёт сметы не найден.');
     }
 
     const content = getContent();
@@ -363,6 +668,7 @@ router.post('/house', requireAuth, (req, res) => {
       specs: parseSpecs(specs),
       parameters: normalizeHouseParameters(content.calculator, req.body.parameters),
       showOnHome: req.body.showOnHome === '1',
+      ...(estimateRunId ? { estimateRunId } : {}),
     };
     content.houses.push(house);
     saveContent(content);
@@ -379,7 +685,11 @@ router.post('/house/:id', requireAuth, (req, res) => {
     const house = content.houses.find((h) => String(h.id) === req.params.id);
     if (!house) return renderPageError(req, res, 'houses', 'Дом не найден');
 
-    const { title, area, price, description, fullDescription, specs } = req.body;
+    const { title, area, price, description, fullDescription, specs, estimateRunId } = req.body;
+    if (!isValidEstimateRunSelection(estimateRunId)) {
+      if (req.file) deleteUploadedImage(`/uploads/${req.file.filename}`);
+      return renderPageError(req, res, 'houses', 'Выбранный расчёт сметы не найден.');
+    }
     if (title) house.title = title;
     if (area) house.area = area;
     if (price) house.price = price;
@@ -389,6 +699,7 @@ router.post('/house/:id', requireAuth, (req, res) => {
     if (req.body.parametersPresent === '1') {
       house.parameters = normalizeHouseParameters(content.calculator, req.body.parameters);
     }
+    setHouseEstimateRun(house, estimateRunId);
     // Снятая галочка в форму не отправляется вовсе, поэтому ориентируемся на
     // скрытый маркер: он говорит, что поле в форме было, и тогда отсутствие
     // showOnHome означает «убрать с главной».
@@ -595,7 +906,8 @@ router.post('/stages', requireAuth, (req, res) => {
 
   const content = getContent();
   if (!Array.isArray(content.stages)) content.stages = [];
-  const stage = { id: nextHouseId(content.stages), title, description: '', photos: [] };
+  const id = Math.max(nextHouseId(content.stages), content.nextStageId || 0);
+  const stage = { id, title, description: '', photos: [] };
   content.stages.push(stage);
   saveContent(content);
   stagesRedirect(res, stage.id);
@@ -608,6 +920,7 @@ router.post('/stages/:id', requireAuth, (req, res) => {
 
   const title = (req.body.title || '').trim();
   if (!title) return renderPageError(req, res, 'stages', 'Название этапа не может быть пустым');
+  if (title !== stage.title) updateHouseInclusionStage(content.houses, content.stages, stage, String(stage.id), title);
   stage.title = title;
   stage.description = (req.body.description || '').trim();
   saveContent(content);
@@ -669,6 +982,10 @@ router.post('/stages/:id/delete', requireAuth, (req, res) => {
   const index = list.findIndex((s) => String(s.id) === req.params.id);
   if (index === -1) return renderPageError(req, res, 'stages', 'Этап не найден');
 
+  const stage = list[index];
+  // Номер удалённого этапа может храниться в шаблоне сметы.
+  content.nextStageId = Math.max(nextHouseId(list), content.nextStageId || 0);
+  updateHouseInclusionStage(content.houses, list, stage, null, stage.title);
   const [removed] = list.splice(index, 1);
   (removed.photos || []).forEach(deleteUploadedImage);
   saveContent(content);

@@ -5,52 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= house.title %> — <%= content.hero.title %></title>
   <meta name="description" content="<%= house.description %>">
-  <link rel="stylesheet" href="/css/style.css">
+  <%- include('partials/public-styles') %>
+  <% if (inclusions.sections.length) { %>
+    <link rel="stylesheet" href="/css/house-inclusions.css">
+  <% } %>
 </head>
 <body>
   <%- include('partials/header') %>
 
-  <section class="container house-detail">
+  <main class="container house-detail">
     <nav class="breadcrumb">
-      <a href="/">Главная</a> <span>/</span> <a href="/#houses">Проекты</a> <span>/</span> <span><%= house.title %></span>
+      <a href="/">Главная</a> <span>/</span> <a href="/projects">Проекты</a> <span>/</span> <span><%= house.title %></span>
     </nav>
 
-    <div class="house-detail-gallery">
-      <button type="button" class="gallery-main" id="galleryMain" style="background-image:url('<%= (house.gallery && house.gallery[0]) || house.image %>')" aria-label="Открыть фото на весь экран">
-        <span class="gallery-zoom-hint">⤢ Увеличить</span>
-      </button>
-      <% if (house.gallery && house.gallery.length > 1) { %>
-        <div class="gallery-thumbs">
-          <% house.gallery.forEach(function(photo, i) { %>
-            <button type="button" class="gallery-thumb <%= i === 0 ? 'is-active' : '' %>" data-image="<%= photo %>">
-              <img src="<%= photo %>" alt="<%= house.title %> — фото <%= i + 1 %>">
-            </button>
-          <% }); %>
+    <header class="project-heading">
+      <div>
+        <h1><%= house.title %></h1>
+        <div class="house-detail-meta">
+          <% if (house.area) { %><span class="house-detail-area"><%= house.area %></span><% } %>
+          <% if (house.price) { %><strong class="house-detail-price"><%= house.price %></strong><% } %>
         </div>
-      <% } %>
-    </div>
-
-    <div class="lightbox" id="lightbox" hidden>
-      <button type="button" class="lightbox-close" id="lightboxClose" aria-label="Закрыть">✕</button>
-      <button type="button" class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Предыдущее фото">‹</button>
-      <img class="lightbox-image" id="lightboxImage" src="" alt="">
-      <button type="button" class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Следующее фото">›</button>
-      <div class="lightbox-counter" id="lightboxCounter"></div>
-    </div>
-
-    <script>
-      // "<" экранируем в <: если бы значение когда-нибудь содержало "</script>",
-      // это преждевременно закрыло бы тег ещё на этапе разбора HTML браузером.
-      window.HOUSE_GALLERY = <%- JSON.stringify(house.gallery && house.gallery.length ? house.gallery : [house.image]).replace(/</g, '\\u003c') %>;
-    </script>
+      </div>
+      <a href="#form" class="btn btn-accent">Получить презентацию</a>
+    </header>
+    <%- include('partials/public-gallery', { media }) %>
 
     <div class="house-detail-body">
       <div class="house-detail-main">
-        <h1><%= house.title %></h1>
-        <div class="house-detail-meta">
-          <span class="house-detail-price"><%= house.price %></span>
-          <span class="house-detail-area"><%= house.area %></span>
-        </div>
         <p class="house-detail-description"><%= house.fullDescription || house.description %></p>
 
         <% if (specs.length > 0) { %>
@@ -68,52 +49,47 @@
 
       <aside class="house-detail-side" id="form">
         <div class="house-detail-card">
-          <h3>Оставить заявку на проект «<%= house.title %>»</h3>
-          <p>Пришлём подробную презентацию, планировки и расчёт стоимости.</p>
+          <h2>Получить презентацию</h2>
+          <p>Пришлём планировки и расчёт стоимости проекта.</p>
           <form action="/request" method="POST" class="side-form" data-lead-form novalidate>
             <input type="hidden" name="returnTo" value="/houses/<%= house.id %>">
-            <input type="text" name="name" placeholder="Ваше имя" required>
-            <input type="tel" name="phone" placeholder="Телефон: +7 (___) ___-__-__" inputmode="tel">
-            <input type="email" name="email" placeholder="E-mail">
-            <p class="cta-form__hint side-form__hint" data-form-hint>Укажите телефон или e-mail — достаточно одного варианта.</p>
+            <%- include('partials/lead-contact-fields') %>
+            <p class="cta-form__hint side-form__hint" data-form-hint aria-live="polite">Укажите телефон или e-mail — достаточно одного варианта.</p>
             <button type="submit" class="btn btn-accent">Отправить заявку</button>
           </form>
           <% if (sent) { %>
-            <p class="side-form__success">Спасибо! Заявка отправлена, мы скоро свяжемся с вами.</p>
+            <p class="side-form__success" role="status">Спасибо! Заявка отправлена, мы скоро свяжемся с вами.</p>
           <% } %>
           <% if (formError) { %>
-            <p class="side-form__error">Проверьте телефон/e-mail — укажите хотя бы одно поле в правильном формате.</p>
+            <p class="side-form__error" role="alert">Укажите имя и проверьте телефон или e-mail.</p>
           <% } %>
         </div>
       </aside>
     </div>
 
+    <% if (inclusions.sections.length) { %>
+      <%- include('partials/house-inclusions', { inclusions }) %>
+    <% } %>
+
     <% if (otherHouses.length > 0) { %>
       <section class="related-houses">
         <h2 class="section-title">Другие проекты</h2>
         <div class="houses-grid">
-          <% otherHouses.forEach(function(h) { %>
-            <article class="house-card">
-              <a href="/houses/<%= h.id %>" class="house-card__image" style="background-image:url('<%= h.image %>')" aria-label="<%= h.title %>"></a>
-              <div class="house-card__body">
-                <h3><a href="/houses/<%= h.id %>" class="house-card__title-link"><%= h.title %></a></h3>
-                <div class="house-card__meta">
-                  <span><%= h.area %></span>
-                  <span><%= h.price %></span>
-                </div>
-                <a href="/houses/<%= h.id %>" class="btn btn-outline">Узнать подробнее</a>
-              </div>
-            </article>
+          <% otherHouses.forEach(function(otherHouse) { %>
+            <%- include('partials/project-card', { house: otherHouse, showDescription: false }) %>
           <% }); %>
         </div>
       </section>
     <% } %>
-  </section>
+  </main>
 
   <%- include('partials/footer') %>
 
   <script src="/js/main.js"></script>
   <script src="/js/house.js"></script>
+  <% if (inclusions.sections.length) { %>
+    <script src="/js/house-inclusions.js"></script>
+  <% } %>
   <script src="/js/form-validation.js"></script>
 </body>
 </html>

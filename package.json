@@ -16,7 +16,10 @@
     "express-rate-limit": "^8.7.0",
     "express-session": "^1.18.0",
     "helmet": "^8.3.0",
-    "multer": "^2.0.1"
+    "jszip": "^3.10.1",
+    "multer": "^2.0.1",
+    "pdfkit": "^0.17.2",
+    "sharp": "^0.34.5"
   },
   "overrides": {
     "uuid": "^11.1.1",

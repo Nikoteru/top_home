@@ -1,0 +1,335 @@
+@font-face {
+  font-family: Manrope;
+  src: url('/fonts/manrope-cyrillic.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: Manrope;
+  src: url('/fonts/manrope-latin.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --bg-soft: #f1f4ef;
+  --surface-green: #e5eee4;
+  --text: #1b251f;
+  --text-muted: #535f57;
+  --accent: #37634e;
+  --accent-dark: #254936;
+  --line: #dbe3dc;
+  --dark: #1d3027;
+  --radius: 16px;
+  --shadow: 0 12px 32px rgba(29, 48, 39, .09);
+  --max-width: 1520px;
+  --page-gutter: clamp(20px, 3.35vw, 60px);
+  --section-space: clamp(48px, 6.5vw, 104px);
+  --site-gap: clamp(16px, 2.25vw, 30px);
+  --header-height: 76px;
+  --display-size: clamp(36px, 4.5vw, 66px);
+  --heading-size: clamp(29px, 3.3vw, 48px);
+}
+
+body { font-family: Manrope, 'Segoe UI', sans-serif; line-height: 1.55; }
+.container { padding-inline: var(--page-gutter); }
+:where(#form, #houses, #advantages, #house-inclusions, #design-process, #stagePanel) {
+  scroll-margin-top: calc(var(--header-height) + 16px);
+}
+:where(a, button, input, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 11px 20px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 750;
+  font-size: 14px;
+  text-align: center;
+  line-height: 1.4;
+}
+.btn-small { min-height: 40px; padding: 8px 13px; font-size: 13px; }
+.btn-outline { background: #fff; border-color: #cfdad1; color: var(--accent-dark); }
+.btn-outline:hover { background: var(--bg-soft); }
+
+.site-header { background: #fff; backdrop-filter: none; }
+.header-inner { height: var(--header-height); gap: clamp(12px, 1.8vw, 26px); }
+.logo { font-size: 22px; font-weight: 800; letter-spacing: -.05em; }
+.main-nav { gap: clamp(9px, 1.45vw, 21px); }
+.main-nav a { text-align: center; line-height: 1.35; }
+.main-nav a.main-nav__all { font-size: clamp(13px, 1.05vw, 15px); font-weight: 650; }
+.main-nav a:is(:hover, .is-active) { color: var(--accent-dark); }
+.main-nav a.is-active { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 7px; }
+.site-header .phone { padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
+.mobile-nav summary { border-radius: 10px; }
+.mobile-nav__links { max-height: calc(100dvh - var(--header-height)); padding-inline: var(--page-gutter); }
+
+.hero { display: block; min-height: 0; padding-block: clamp(12px, 2.15vw, 26px) 0; }
+.hero-frame {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-height: clamp(514px, 45vw, 654px);
+  border-radius: clamp(16px, 2vw, 27px);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--dark);
+}
+.hero-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.hero-frame::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: linear-gradient(92deg, rgba(14, 25, 20, .92) 1%, rgba(14, 25, 20, .73) 26%, rgba(14, 25, 20, .23) 58%, transparent 83%);
+}
+.hero-inner { position: relative; z-index: 2; max-width: 820px; padding: clamp(26px, 5.2vw, 76px); }
+.hero h1 {
+  max-width: 18ch;
+  margin: 0 0 19px;
+  font-size: clamp(37px, 4.7vw, 68px);
+  line-height: 1.05;
+  letter-spacing: -.048em;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+.hero-subtitle { max-width: 43ch; margin: 0 0 26px; color: #eef4ed; font-size: clamp(15px, 1.35vw, 19px); opacity: 1; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.hero-actions .btn-accent { background: #e0eddb; border-color: #e0eddb; color: var(--accent-dark); }
+.hero-actions .btn-accent:hover { background: #fff; border-color: #fff; }
+.hero-actions .btn-outline { background: rgba(22, 40, 30, .42); border-color: #bccbc1; color: #fff; }
+.hero-actions .btn-outline:hover { background: var(--dark); }
+.hero-actions a:focus-visible { outline-color: #e0eddb; }
+.media-caption {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: rgba(25, 41, 33, .84);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.hero-frame > .media-caption { z-index: 2; left: auto; right: 16px; bottom: 16px; }
+
+.section-title, .cta-text h2 {
+  margin: 0 0 clamp(20px, 2.7vw, 38px);
+  font-size: var(--heading-size);
+  font-weight: 740;
+  line-height: 1.12;
+  letter-spacing: -.038em;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.houses, .advantages { padding-block: var(--section-space); }
+.home-section-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--site-gap);
+  margin-bottom: clamp(24px, 3vw, 42px);
+}
+.home-section-head h2 { margin: 0; }
+.home-section-head p { max-width: 58ch; margin: 0; color: var(--text-muted); }
+.advantages { background: var(--bg-soft); }
+.advantages-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 13px; }
+.advantage-card { padding: clamp(16px, 1.65vw, 25px); box-shadow: none; }
+.advantage-icon { width: 48px; height: 48px; margin-bottom: 15px; border-radius: 9px; }
+.advantage-card h3 { font-size: 17px; line-height: 1.32; }
+.advantage-card p { font-size: 14px; }
+.houses-more { margin-top: var(--site-gap); text-align: left; }
+
+.projects-page, .house-detail { padding-block: clamp(20px, 3vw, 42px) var(--section-space); }
+.breadcrumb { margin-bottom: clamp(19px, 2.3vw, 31px); font-size: 13px; overflow-wrap: anywhere; }
+.breadcrumb span { margin-inline: 4px; }
+.projects-head { gap: var(--site-gap); margin-bottom: clamp(24px, 3vw, 46px); }
+.projects-head h1, .project-heading h1, .not-found h1 {
+  margin: 0 0 9px;
+  font-size: var(--display-size);
+  font-weight: 750;
+  letter-spacing: -.045em;
+  line-height: 1.09;
+  overflow-wrap: anywhere;
+}
+.projects-count { max-width: 62ch; font-size: clamp(15px, 1.4vw, 17px); }
+.projects-sort { gap: 6px; }
+.sort-chip { padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: 650; }
+.sort-chip.is-active { background: var(--surface-green); border-color: #cbdcce; color: var(--accent-dark); }
+.projects-empty { padding: 26px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--text-muted); }
+.houses-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--site-gap); }
+.house-card { display: flex; flex-direction: column; box-shadow: none; }
+.house-card__image, .calc-project__image { position: relative; display: block; height: auto; aspect-ratio: 3 / 2; overflow: hidden; background: var(--bg-soft); }
+.house-card__image img, .calc-project__image img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .28s ease; }
+.house-card__image:hover img, .calc-project__image:hover img { transform: scale(1.035); }
+.house-card__image--empty { display: grid; place-items: center; padding: 12px; color: var(--text-muted); }
+.house-card__body { display: flex; flex: 1; flex-direction: column; align-items: flex-start; padding: clamp(17px, 2vw, 27px); }
+.house-card__body h3 { margin-bottom: 12px; font-size: clamp(20px, 1.9vw, 26px); line-height: 1.2; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.house-card__meta { width: 100%; flex-wrap: wrap; justify-content: flex-start; gap: 5px 18px; margin-bottom: 13px; color: var(--text-muted); }
+.house-card__meta strong { color: var(--accent-dark); font-weight: 800; }
+.house-card__body p { min-height: 0; margin-bottom: 21px; }
+.house-card__body > .btn { margin-top: auto; }
+.portfolio-card__count { border-radius: 6px; background: rgba(25, 41, 33, .84); }
+.portfolio-card__address::before, .portfolio-detail__address::before { content: none; }
+.portfolio-grid--featured { grid-template-columns: minmax(0, 1fr); }
+.portfolio-grid--featured .portfolio-card { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); }
+.portfolio-grid--featured .house-card__body { align-self: center; padding: clamp(22px, 4vw, 60px); }
+.portfolio-grid--featured .house-card__body h3 { font-size: clamp(25px, 3vw, 41px); }
+
+.project-heading { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: clamp(22px, 3vw, 36px); }
+.project-heading > div { min-width: 0; }
+.house-detail-meta { flex-wrap: wrap; gap: 6px 22px; margin: 10px 0 0; }
+.house-detail-price, .house-detail-area { font-size: clamp(16px, 1.8vw, 23px); }
+.house-detail-gallery { margin-bottom: clamp(28px, 4.5vw, 66px); }
+.gallery-main { position: relative; height: auto; max-height: 650px; aspect-ratio: 2 / 1; overflow: hidden; }
+.gallery-main > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.gallery-zoom-hint { opacity: 1; border-radius: 8px; font-family: inherit; }
+.gallery-thumbs { gap: 9px; }
+.gallery-thumb { width: clamp(76px, 9vw, 126px); height: auto; aspect-ratio: 4 / 3; border-radius: 9px; }
+.house-detail-body { grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr); gap: clamp(28px, 5vw, 80px); }
+.house-detail-description { max-width: 70ch; margin: 0 0 29px; font-size: 17px; white-space: pre-line; }
+.house-detail-main .section-title { font-size: clamp(25px, 2.7vw, 37px); }
+.specs-table { padding: 0 18px; border: 1px solid var(--line); border-radius: var(--radius); }
+.specs-row:last-child { border-bottom: 0; }
+.specs-row dt, .specs-row dd { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.house-detail-side, .stage-panel, .calc-matches { top: calc(var(--header-height) + 16px); }
+.house-detail-card { padding: clamp(20px, 2.7vw, 38px); background: var(--bg-soft); }
+.house-detail-card h2 { margin: 0 0 9px; font-size: clamp(21px, 2vw, 28px); line-height: 1.25; letter-spacing: -.02em; }
+.related-houses { margin-top: var(--section-space); }
+.portfolio-detail { gap: var(--site-gap); margin-bottom: 0; }
+.portfolio-detail__info { align-self: center; }
+.portfolio-detail__address a { text-decoration: underline; text-underline-offset: 3px; }
+.portfolio-map { aspect-ratio: 16 / 10; }
+
+.stages-layout { grid-template-columns: minmax(245px, .74fr) minmax(0, 1.75fr); gap: var(--site-gap); }
+.timeline { max-height: min(66vh, 650px); overflow-y: auto; padding: 4px 9px 4px 4px; scrollbar-gutter: stable; }
+.timeline__item::before { content: none; }
+.timeline__btn { margin: 0 0 7px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.timeline__btn.is-active { background: var(--surface-green); border-color: #c9d9ca; }
+.timeline__dot { width: 36px; height: 36px; border: 0; border-radius: 8px; background: var(--bg-soft); font-size: 13px; }
+.timeline__btn.is-active .timeline__dot { transform: none; }
+.timeline__title { overflow-wrap: anywhere; }
+.stage-panel { min-height: 0; padding: clamp(19px, 3.5vw, 52px); scroll-margin-top: calc(var(--header-height) + 16px); }
+.stage-panel__title { font-size: clamp(26px, 3.3vw, 44px); line-height: 1.12; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.stage-panel__text { max-width: 65ch; }
+.stage-panel__empty { font-style: normal; }
+.stage-panel__photos { grid-template-columns: repeat(auto-fit, minmax(min(100%, 208px), 1fr)); gap: 14px; }
+.stage-panel__photo { aspect-ratio: 4 / 3; border-radius: 12px; }
+.stage-panel__nav { justify-content: flex-start; margin-top: 20px; }
+
+.calc-layout { grid-template-columns: minmax(0, 1.8fr) minmax(300px, 1fr); gap: var(--site-gap); }
+.calc-form { gap: 24px; }
+.calc-block, .calc-matches__card { padding: clamp(14px, 2vw, 26px); border: 1px solid var(--line); border-radius: var(--radius); }
+.calc-block--choices legend { width: auto; max-width: 100%; margin-bottom: 0; padding-inline: 5px; }
+.calc-block__title { font-size: clamp(17px, 1.65vw, 23px); line-height: 1.35; }
+.calc-block__num { background: var(--surface-green); color: var(--accent-dark); border-radius: 8px; }
+.calc-block__description { margin-top: 0; }
+.calc-area__value { background: var(--bg-soft); border-radius: 9px; }
+.calc-option__card { min-width: 0; border-width: 1px; overflow-wrap: anywhere; }
+.calc-option__input:checked + .calc-option__card { background: var(--surface-green); box-shadow: none; }
+.calc-option__input:checked + .calc-option__card::after { width: 19px; height: 19px; font-size: 11px; }
+.calc-matches { scroll-margin-top: calc(var(--header-height) + 16px); }
+.calc-matches__card h2 { font-size: clamp(20px, 2vw, 27px); letter-spacing: -.025em; }
+.calc-matches__results { max-height: max(220px, calc(100dvh - 310px)); }
+.calc-project { border-radius: 12px; }
+.calc-project__image { aspect-ratio: 16 / 9; }
+.calc-project__body .btn { display: inline-flex; }
+
+.cta { color: var(--text); background: transparent; padding-block: 0 var(--section-space); }
+.advantages + .cta { padding-top: var(--section-space); }
+.cta-inner {
+  display: grid;
+  grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+  align-items: center;
+  gap: clamp(22px, 6vw, 86px);
+  padding: clamp(20px, 4.6vw, 66px);
+  border-radius: var(--radius);
+  background: var(--surface-green);
+}
+.cta-text { max-width: 540px; }
+.cta-text h2 { margin-bottom: 13px; }
+.cta-text p { color: var(--text-muted); }
+.cta-form { max-width: none; }
+.lead-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.lead-fields__name { grid-column: 1 / -1; }
+.side-form .lead-fields { grid-template-columns: 1fr; }
+[data-lead-form] label { display: grid; min-width: 0; gap: 5px; color: var(--text); font-size: 14px; font-weight: 650; }
+[data-lead-form] input:not([type="hidden"]) {
+  width: 100%;
+  min-width: 0;
+  min-height: 47px;
+  padding: 9px 12px;
+  border: 1px solid #bfcfc2;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+[data-lead-form] input::placeholder { color: #647268; }
+.cta-form__hint, .cta-form__note { color: var(--text-muted); font-size: 13px; }
+.house-detail-card .side-form__hint { margin: 0; }
+.cta-form__hint.is-error, .house-detail-card .side-form__error { color: #9b342d; }
+.house-detail-card .side-form__success { color: var(--accent-dark); }
+.cta-form > .btn, .side-form > .btn { align-self: flex-start; }
+.cta-form .toast { position: static; transform: none; background: #fff; color: var(--accent-dark); }
+.cta-form .toast--error { background: #fff2ef; color: #9b342d; }
+
+.site-footer { padding-top: clamp(32px, 4.2vw, 64px); }
+.site-footer .logo span { color: #b8d5bd; }
+.footer-bottom { padding-inline: var(--page-gutter); }
+.footer-text, .footer-col a, .footer-col span { color: #d0dad1; }
+.footer-bottom, .footer-admin-link { color: #bfcfc2; }
+.site-footer a:hover { color: #fff; }
+.site-footer a:focus-visible { outline-color: #d5e8d6; }
+.not-found { padding-block: var(--section-space); text-align: left; }
+
+@media (max-width: 1120px) {
+  .advantages-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 960px) {
+  .calc-layout { grid-template-columns: minmax(0, 1fr); }
+  .calc-matches__results { max-height: none; }
+  .calc-page { padding-bottom: calc(var(--section-space) + 35px); }
+  .calc-mobilebar { padding-inline: var(--page-gutter); }
+}
+@media (max-width: 900px) {
+  .houses-grid:not(.portfolio-grid--featured) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stages-layout, .house-detail-body { grid-template-columns: minmax(0, 1fr); }
+  .timeline { max-height: clamp(200px, 38vh, 330px); }
+  .gallery-main { aspect-ratio: 16 / 10; }
+}
+@media (max-width: 680px) {
+  :root { --header-height: 65px; }
+  .hero-frame { align-items: end; min-height: 470px; }
+  .hero-frame::before { background: linear-gradient(0deg, rgba(14, 25, 20, .97), rgba(14, 25, 20, .74) 48%, rgba(14, 25, 20, .06) 90%); }
+  .hero-media { object-position: 64% center; }
+  .hero-inner { padding-bottom: 52px; }
+  .hero h1 { font-size: clamp(33px, 7.1vw, 45px); }
+  .hero-frame > .media-caption { bottom: 10px; right: 10px; }
+  .home-section-head, .cta-inner { grid-template-columns: minmax(0, 1fr); }
+  .advantages-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .portfolio-grid--featured .portfolio-card { grid-template-columns: minmax(0, 1fr); }
+  .specs-row { gap: 12px; }
+}
+@media (max-width: 640px) {
+  .calc-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 500px) {
+  .houses-grid:not(.portfolio-grid--featured), .lead-fields { grid-template-columns: minmax(0, 1fr); }
+  .gallery-main { aspect-ratio: 4 / 3; }
+  .gallery-zoom-hint { right: 10px; bottom: 10px; }
+  .advantages-grid { grid-template-columns: minmax(0, 1fr); }
+  .calc-area__value input { min-width: 0; width: 45px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn, .house-card, .house-card__image img, .calc-project__image img, .calc-mobilebar { transition: none; }
+}

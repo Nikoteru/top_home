@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Все проекты — <%= content.hero.title %></title>
   <meta name="description" content="Каталог проектов современных одноэтажных домов: цены, площади, характеристики.">
-  <link rel="stylesheet" href="/css/style.css">
+  <%- include('partials/public-styles') %>
 </head>
 <body>
   <%- include('partials/header') %>
@@ -38,46 +38,17 @@
     <% } else { %>
       <div class="houses-grid">
         <% houses.forEach(function(house) { %>
-          <article class="house-card">
-            <a href="/houses/<%= house.id %>" class="house-card__image" style="background-image:url('<%= house.image %>')" aria-label="<%= house.title %>"></a>
-            <div class="house-card__body">
-              <h3><a href="/houses/<%= house.id %>" class="house-card__title-link"><%= house.title %></a></h3>
-              <div class="house-card__meta">
-                <span><%= house.area %></span>
-                <span><%= house.price %></span>
-              </div>
-              <p><%= house.description %></p>
-              <a href="/houses/<%= house.id %>" class="btn btn-outline">Узнать подробнее</a>
-            </div>
-          </article>
+          <%- include('partials/project-card', { house, showDescription: true }) %>
         <% }); %>
       </div>
     <% } %>
   </section>
 
-  <section id="form" class="cta">
-    <div class="container cta-inner">
-      <div class="cta-text">
-        <h2>Не нашли подходящий проект?</h2>
-        <p>Оставьте заявку — подберём проект под ваш участок и бюджет или адаптируем любой из каталога.</p>
-      </div>
-      <form class="cta-form" action="/request" method="POST" data-lead-form novalidate>
-        <input type="hidden" name="returnTo" value="/projects">
-        <input type="text" name="name" placeholder="Ваше имя" required>
-        <input type="tel" name="phone" placeholder="Телефон: +7 (___) ___-__-__" inputmode="tel">
-        <input type="email" name="email" placeholder="E-mail">
-        <p class="cta-form__hint" data-form-hint>Укажите телефон или e-mail — достаточно одного варианта.</p>
-        <button type="submit" class="btn btn-accent">Отправить заявку</button>
-        <p class="cta-form__note">Нажимая кнопку, вы соглашаетесь с обработкой персональных данных.</p>
-      </form>
-    </div>
-    <% if (sent) { %>
-      <div class="toast" id="toast">Спасибо! Ваша заявка отправлена, мы скоро свяжемся с вами.</div>
-    <% } %>
-    <% if (formError) { %>
-      <div class="toast toast--error" id="toastError">Проверьте телефон/e-mail — укажите хотя бы одно поле в правильном формате.</div>
-    <% } %>
-  </section>
+  <%- include('partials/lead-cta', {
+    ctaTitle: 'Не нашли подходящий проект?',
+    ctaText: 'Оставьте заявку — подберём проект под ваш участок и бюджет или адаптируем любой из каталога.',
+    returnTo: '/projects',
+  }) %>
 
   <%- include('partials/footer') %>
 

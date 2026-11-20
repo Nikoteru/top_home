@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Комплектация · <%= house.title %></title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/house-inclusions.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'houses', newRequestsCount }) %>
+
+  <main class="container admin-main">
+    <div class="admin-section-header admin-section-header--wide">
+      <h1 class="admin-section-title">Комплектация · <%= house.title %></h1>
+      <div class="inclusion-editor__links">
+        <a class="btn btn-outline btn-small" href="/admin/houses?open=<%= encodeURIComponent(house.id) %>">К проекту</a>
+        <a class="btn btn-outline btn-small" href="/houses/<%= encodeURIComponent(house.id) %>#house-inclusions" target="_blank" rel="noopener">Карточка на сайте</a>
+      </div>
+    </div>
+    <% if (saved) { %><div class="alert alert-success" role="status">Комплектация сохранена.</div><% } %>
+
+    <form method="POST" action="/admin/house/<%= encodeURIComponent(house.id) %>/inclusions"
+          class="admin-upload-form inclusion-editor" data-inclusion-form novalidate>
+      <div class="alert alert-error" role="alert" tabindex="-1" data-inclusion-error hidden></div>
+      <section class="admin-card inclusion-editor__fields">
+        <label>Заголовок блока
+          <input type="text" data-inclusion-title value="<%= inclusions.title %>">
+        </label>
+        <label>Примечание под списком этапов
+          <textarea data-inclusion-note rows="3"><%= inclusions.note %></textarea>
+        </label>
+      </section>
+
+      <% if (inclusions.unassigned.length && stages.length) { %>
+        <section class="admin-card inclusion-editor__fields">
+          <h2>Пункты без этапа</h2>
+          <p>Выберите, в какой этап перенести ранее сохранённые пункты.</p>
+          <% inclusions.unassigned.forEach(function(section) { %>
+            <label><%= section.title %>
+              <select data-inclusion-assignment="<%= section.index %>">
+                <option value="">Оставить без этапа</option>
+                <% stages.forEach(function(stage) { %>
+                  <option value="<%= stage.id %>"><%= stage.title %></option>
+                <% }); %>
+              </select>
+            </label>
+          <% }); %>
+        </section>
+      <% } %>
+
+      <% if (stages.length) { %>
+        <div class="house-inclusions inclusion-editor__stages" data-house-inclusions>
+          <div class="house-inclusions__layout">
+            <div class="house-inclusions__tabs" aria-label="Этапы стройки" data-inclusion-tabs hidden>
+              <% stages.forEach(function(stage, index) { %>
+                <button type="button" id="inclusion-edit-tab-<%= index %>" aria-controls="inclusion-edit-panel-<%= index %>" data-inclusion-tab <%= String(stage.id) === inclusions.sections[0]?.stageId ? 'data-inclusion-active' : '' %>>
+                  <span class="house-inclusions__stage-title"><%= stage.title %></span>
+                  <span class="inclusion-editor__count" data-item-count hidden></span>
+                </button>
+              <% }); %>
+            </div>
+            <div class="house-inclusions__panels">
+              <% stages.forEach(function(stage, index) { %>
+                <section class="house-inclusions__panel inclusion-editor__section" id="inclusion-edit-panel-<%= index %>" aria-labelledby="inclusion-edit-heading-<%= index %>" data-inclusion-stage="<%= stage.id %>">
+                  <h3 id="inclusion-edit-heading-<%= index %>"><%= stage.title %></h3>
+                  <div class="inclusion-editor__list" data-inclusion-items></div>
+                  <p class="field-hint" data-empty-stage>В этом этапе пока нет пунктов.</p>
+                  <button type="button" class="btn btn-outline btn-small" data-add-item>Добавить пункт</button>
+                </section>
+              <% }); %>
+            </div>
+          </div>
+        </div>
+      <% } else { %>
+        <p>Добавьте этапы в разделе <a href="/admin/stages">«Этапы стройки»</a>.</p>
+      <% } %>
+
+      <div class="admin-form-actions inclusion-editor__actions">
+        <button type="submit" class="btn btn-accent btn-small">Сохранить комплектацию</button>
+      </div>
+      <textarea data-inclusion-data hidden><%= JSON.stringify(inclusions.sections) %></textarea>
+    </form>
+
+    <template id="inclusion-item-template">
+      <div class="inclusion-editor__item" data-inclusion-entry>
+        <div class="inclusion-editor__entry-head">
+          <label>Название пункта
+            <input type="text" data-item-title required>
+          </label>
+          <div class="admin-form-actions inclusion-editor__actions">
+            <button type="button" class="btn btn-outline btn-small" data-move-entry="up" aria-label="Переместить пункт выше">↑</button>
+            <button type="button" class="btn btn-outline btn-small" data-move-entry="down" aria-label="Переместить пункт ниже">↓</button>
+            <button type="button" class="btn btn-ghost btn-small" data-remove-entry>Удалить пункт</button>
+          </div>
+        </div>
+        <label>Описание пункта
+          <textarea data-item-description rows="4" required></textarea>
+        </label>
+      </div>
+    </template>
+  </main>
+  <script src="/js/house-inclusions.js"></script>
+  <script src="/js/admin-house-inclusions.js"></script>
+</body>
+</html>

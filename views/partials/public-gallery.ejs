@@ -1,0 +1,30 @@
+<% if (media.photos.length) { %>
+  <div class="house-detail-gallery">
+    <button type="button" class="gallery-main" id="galleryMain" aria-label="Открыть <%= media.illustrated ? 'визуализацию' : 'фото' %> на весь экран">
+      <img src="<%= media.photos[0] %>" alt="" fetchpriority="high">
+      <% if (media.illustrated) { %><span class="media-caption">Архитектурная визуализация</span><% } %>
+      <span class="gallery-zoom-hint">Увеличить <span aria-hidden="true">⤢</span></span>
+    </button>
+    <% if (media.photos.length > 1) { %>
+      <div class="gallery-thumbs" aria-label="Фотографии">
+        <% media.photos.forEach(function(photo, index) { %>
+          <button type="button" class="gallery-thumb <%= index === 0 ? 'is-active' : '' %>" aria-label="Фото <%= index + 1 %>" aria-pressed="<%= index === 0 %>">
+            <img src="<%= photo %>" alt="" loading="lazy">
+          </button>
+        <% }); %>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <button type="button" class="lightbox-close" id="lightboxClose" aria-label="Закрыть">✕</button>
+    <button type="button" class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Предыдущее фото">‹</button>
+    <img class="lightbox-image" id="lightboxImage" alt="">
+    <button type="button" class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Следующее фото">›</button>
+    <div class="lightbox-counter" id="lightboxCounter"></div>
+  </div>
+
+  <script>
+    window.HOUSE_GALLERY = <%- JSON.stringify(media.photos).replace(/</g, '\\u003c') %>;
+  </script>
+<% } %>

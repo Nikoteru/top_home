@@ -1,12 +1,16 @@
 <header class="site-header">
   <div class="container header-inner">
     <a href="/" class="logo">Топ<span>5</span>Домов</a>
-    <nav class="main-nav">
-      <a href="/projects" class="main-nav__all <%= typeof activePage !== 'undefined' && activePage === 'projects' ? 'is-active' : '' %>">Все проекты</a>
-      <a href="/portfolio" class="main-nav__all <%= typeof activePage !== 'undefined' && activePage === 'portfolio' ? 'is-active' : '' %>">Портфолио</a>
-      <a href="/stages" class="main-nav__all <%= typeof activePage !== 'undefined' && activePage === 'stages' ? 'is-active' : '' %>">Этапы стройки</a>
-      <a href="/calculator" class="main-nav__all <%= typeof activePage !== 'undefined' && activePage === 'calculator' ? 'is-active' : '' %>">Подбор проекта</a>
+    <% const currentPage = typeof activePage === 'undefined' ? '' : activePage; %>
+    <nav class="main-nav" aria-label="Основная навигация">
+      <%- include('header-links', { currentPage }) %>
     </nav>
+    <details class="mobile-nav">
+      <summary>Меню</summary>
+      <nav class="mobile-nav__links" aria-label="Основная навигация">
+        <%- include('header-links', { currentPage }) %>
+      </nav>
+    </details>
     <a class="phone" href="tel:<%= content.contacts.phone.replace(/[^+\d]/g, '') %>"><%= content.contacts.phone %></a>
   </div>
 </header>

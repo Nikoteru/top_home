@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Расчёт смет — Админка</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/estimate-runs.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'estimateRuns', newRequestsCount }) %>
+  <main class="container admin-main">
+    <div class="admin-section-header admin-section-header--wide">
+      <h1 class="admin-section-title">Расчёт смет</h1>
+      <% if (isSuperadmin) { %>
+        <a class="btn btn-outline btn-small" href="/admin/estimates">Шаблоны смет</a>
+      <% } %>
+    </div>
+
+    <section aria-labelledby="estimate-run-new" class="estimate-run-section">
+      <h2 id="estimate-run-new">Выберите шаблон</h2>
+      <% if (!templates.length) { %>
+        <p class="admin-empty">Шаблонов для заполнения пока нет.</p>
+      <% } %>
+      <% for (const template of templates) { %>
+        <article class="admin-card estimate-list-item">
+          <h3><%= template.title %></h3>
+          <a class="btn btn-outline btn-small" href="/admin/estimate-runs/new?template=<%= encodeURIComponent(template.id) %>">Рассчитать</a>
+        </article>
+      <% } %>
+    </section>
+
+    <section aria-labelledby="estimate-run-saved" class="estimate-run-section">
+      <h2 id="estimate-run-saved">Сохранённые сметы</h2>
+      <% if (!runs.length) { %>
+        <p class="admin-empty">Сохранённых смет пока нет.</p>
+      <% } %>
+      <% for (const run of runs) { %>
+        <article class="admin-card estimate-list-item">
+          <h3><a href="/admin/estimate-runs/<%= encodeURIComponent(run.id) %>"><%= run.title %></a></h3>
+          <div class="admin-form-actions">
+            <strong><%= run.total %></strong>
+            <a class="btn btn-outline btn-small" href="/admin/estimate-runs/<%= encodeURIComponent(run.id) %>/export.xlsx">Скачать в Excel</a>
+          </div>
+        </article>
+      <% } %>
+    </section>
+  </main>
+</body>
+</html>

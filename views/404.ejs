@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Страница не найдена</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <%- include('partials/public-styles') %>
 </head>
 <body>
   <%- include('partials/header') %>
-  <section class="container not-found">
-    <h1>Дом не найден</h1>
-    <p>Возможно, проект был удалён или ссылка устарела.</p>
+  <main class="container not-found">
+    <h1>Страница не найдена</h1>
+    <p>Проверьте адрес страницы или вернитесь на главную.</p>
     <a href="/" class="btn btn-accent">На главную</a>
-  </section>
-  <%- include('partials/footer') %>
+  </main>
+  <%- include('partials/footer', { formTarget: '/#form' }) %>
 </body>
 </html>

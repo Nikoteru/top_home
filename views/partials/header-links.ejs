@@ -1,0 +1,9 @@
+<% for (const [page, label] of [
+  ['projects', 'Все проекты'],
+  ['individual-planning', 'Индивидуальное проектирование'],
+  ['portfolio', 'Портфолио'],
+  ['stages', 'Этапы стройки'],
+  ['calculator', 'Подбор проекта'],
+]) { %>
+  <a href="/<%= page %>" class="main-nav__all<%= currentPage === page ? ' is-active' : '' %>" <% if (currentPage === page) { %>aria-current="page"<% } %>><%= label %></a>
+<% } %>

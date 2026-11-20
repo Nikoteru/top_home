@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= run.title || 'Новый расчёт' %> — Расчёт смет</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/estimate-runs.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'estimateRuns', newRequestsCount }) %>
+  <% const numericColumns = [
+    { key: 'price', letter: 'D', title: 'Цена за единицу', precision: 2 },
+    { key: 'quantity', letter: 'E', title: 'Количество', precision: 3 },
+    { key: 'amount', letter: 'F', title: 'Сумма', precision: 2 },
+  ]; %>
+  <main class="container admin-main estimate-editor-main">
+    <div class="admin-section-header admin-section-header--wide">
+      <h1 class="admin-section-title"><%= run.title || 'Новый расчёт' %></h1>
+      <div class="estimate-editor-links">
+        <% if (run.id) { %>
+          <a class="btn btn-outline btn-small" href="/admin/estimate-runs/<%= encodeURIComponent(run.id) %>/export.xlsx">Скачать в Excel</a>
+        <% } %>
+        <a class="btn btn-outline btn-small" href="/admin/estimate-runs">К расчёту смет</a>
+      </div>
+    </div>
+    <% if (saved) { %>
+      <div class="alert alert-success" role="status">Смета сохранена.</div>
+    <% } %>
+    <form class="admin-upload-form estimate-editor" data-estimate-run-form method="post"
+          action="/admin/estimate-runs<%= run.id ? '/' + encodeURIComponent(run.id) : '' %>">
+      <div class="estimate-sheet">
+        <label class="estimate-sheet-title">Название расчёта
+          <input type="text" name="title" data-run-title value="<%= run.title %>" required>
+        </label>
+        <p class="estimate-run-hint">
+          Шаблон «<%= template.title %>». Введите числа в выделенных базовых ячейках.
+          Если сумма оставлена пустой и формула для неё не задана, она рассчитывается по цене и количеству.
+        </p>
+        <div class="estimate-table-scroll" tabindex="0" role="region" aria-label="Таблица сметы">
+          <table class="estimate-table">
+            <colgroup>
+              <col class="estimate-col-index">
+              <col class="estimate-col-position">
+              <col>
+              <col class="estimate-col-unit">
+              <col class="estimate-col-number" span="3">
+              <col class="estimate-col-actions">
+            </colgroup>
+            <thead>
+              <tr class="estimate-column-letters" aria-hidden="true">
+                <td class="estimate-row-index"></td>
+                <% for (const letter of ['A', 'B', 'C', 'D', 'E', 'F', 'G']) { %>
+                  <td><%= letter %></td>
+                <% } %>
+              </tr>
+              <tr class="estimate-column-headings">
+                <td class="estimate-row-index" aria-hidden="true">1</td>
+                <th class="estimate-position-index" scope="col">№</th>
+                <th scope="col">Наименование</th>
+                <th scope="col">Ед. изм.</th>
+                <th scope="col">Цена за ед., ₽</th>
+                <th scope="col">Количество</th>
+                <th scope="col">Сумма, ₽</th>
+                <th scope="col">Ручной ввод</th>
+              </tr>
+            </thead>
+            <% let sheetRow = 1; %>
+            <% for (const [stageIndex, stage] of template.stages.entries()) { %>
+              <tbody>
+                <tr class="estimate-stage-heading">
+                  <td class="estimate-row-index" aria-hidden="true"><%= ++sheetRow %></td>
+                  <th scope="row" colspan="7">Этап · <%= stage.title %></th>
+                </tr>
+                <% for (const [groupIndex, group] of stage.groups.entries()) { %>
+                  <tr class="estimate-group-heading">
+                    <td class="estimate-row-index" aria-hidden="true"><%= ++sheetRow %></td>
+                    <th scope="row" colspan="7" data-group-title><%= group.type === 'work' ? 'Работы' : 'Материалы' %></th>
+                  </tr>
+                  <% for (const [position, item] of group.items.entries()) {
+                    const row = ++sheetRow;
+                    const entries = run.entries?.[row] || {};
+                    const baseCount = numericColumns.filter((column) => isBaseCell(item, column.key)).length;
+                  %>
+                    <tr class="estimate-item">
+                      <td class="estimate-row-index" aria-hidden="true"><%= row %></td>
+                      <td class="estimate-position-index"><%= position + 1 %></td>
+                      <th scope="row"><%= item.title %></th>
+                      <td><%= item.unit %></td>
+                      <% for (const column of numericColumns) {
+                        const address = column.letter + row;
+                        const label = column.title + ', ' + item.title + ' (' + address + ')';
+                      %>
+                        <% if (isBaseCell(item, column.key)) { %>
+                          <td class="estimate-cell-input estimate-run-base">
+                            <input type="text" inputmode="decimal" autocomplete="off" data-run-entry="<%= column.key %>"
+                                   data-run-row="<%= row %>" data-run-address="<%= address %>"
+                                   value="<%= entries[column.key] ?? '' %>" placeholder="—"
+                                   pattern="[0-9]{1,9}([.,][0-9]{1,<%= column.precision %>})?" aria-label="<%= label %>">
+                          </td>
+                        <% } else { %>
+                          <td class="estimate-run-value" data-run-result="<%= column.key %>" data-run-row="<%= row %>"
+                              data-run-address="<%= address %>">—</td>
+                        <% } %>
+                      <% } %>
+                      <td class="estimate-run-mode"><%= baseCount %> из <%= numericColumns.length %></td>
+                    </tr>
+                  <% } %>
+                  <tr class="estimate-group-total">
+                    <td class="estimate-row-index" aria-hidden="true"><%= ++sheetRow %></td>
+                    <th scope="row" colspan="5">Итого по подблоку</th>
+                    <td data-group-total data-run-group-total="<%= stageIndex %>:<%= groupIndex %>">0,00 ₽</td>
+                    <td></td>
+                  </tr>
+                <% } %>
+                <tr class="estimate-run-divider" aria-hidden="true">
+                  <td class="estimate-row-index"><%= ++sheetRow %></td>
+                  <td colspan="7"></td>
+                </tr>
+                <tr class="estimate-stage-total">
+                  <td class="estimate-row-index" aria-hidden="true"><%= ++sheetRow %></td>
+                  <th scope="row" colspan="5">Итого по этапу</th>
+                  <td data-stage-total data-run-stage-total="<%= stageIndex %>">0,00 ₽</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            <% } %>
+            <tfoot>
+              <tr class="estimate-run-divider" aria-hidden="true">
+                <td class="estimate-row-index"><%= ++sheetRow %></td>
+                <td colspan="7"></td>
+              </tr>
+              <tr class="estimate-grand-total">
+                <td class="estimate-row-index" aria-hidden="true"><%= ++sheetRow %></td>
+                <th scope="row" colspan="5">Итого по смете</th>
+                <td data-estimate-total data-run-total>0,00 ₽</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="alert alert-error" role="status" tabindex="-1" data-run-calculation-error hidden></div>
+      <div class="admin-form-actions">
+        <button class="btn btn-accent btn-small" type="submit">Сохранить смету</button>
+      </div>
+      <div class="alert alert-error" role="alert" data-run-save-error hidden></div>
+      <textarea data-estimate-run-data hidden><%= JSON.stringify({ template, runId: run.id, revision: run.revision }) %></textarea>
+    </form>
+  </main>
+  <script src="/js/estimate-totals.js"></script>
+  <script src="/js/estimate-formulas.js"></script>
+  <script src="/js/estimate-run-editor.js"></script>
+</body>
+</html>

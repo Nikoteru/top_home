@@ -1,0 +1,16 @@
+module.exports = [
+  { value: 'шт.', label: 'Штука' },
+  { value: 'компл.', label: 'Комплект' },
+  { value: 'м', label: 'Метр' },
+  { value: 'пог. м', label: 'Погонный метр' },
+  { value: 'м²', label: 'Квадратный метр' },
+  { value: 'м³', label: 'Кубический метр' },
+  { value: 'кг', label: 'Килограмм' },
+  { value: 'т', label: 'Тонна' },
+  { value: 'л', label: 'Литр' },
+  { value: 'упак.', label: 'Упаковка' },
+  { value: 'рул.', label: 'Рулон' },
+  { value: 'ч', label: 'Час' },
+  { value: 'дн.', label: 'День' },
+  { value: 'смена', label: 'Смена' },
+];

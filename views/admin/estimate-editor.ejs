@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= estimate.id ? estimate.title : 'Новый шаблон сметы' %> — Админка</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/estimate-templates.css">
+</head>
+<body class="admin-body">
+  <%- include('../partials/admin-header', { active: 'estimates', newRequestsCount }) %>
+
+  <main class="container admin-main estimate-editor-main">
+    <div class="admin-section-header admin-section-header--wide">
+      <h2 class="admin-section-title"><%= estimate.id ? 'Редактирование шаблона' : 'Новый шаблон сметы' %></h2>
+      <div class="estimate-editor-links">
+        <a href="/admin/calculator/directory#estimate-units" class="btn btn-outline btn-small" target="_blank" rel="noopener">Справочник единиц измерений</a>
+        <a href="/admin/estimates" class="btn btn-outline btn-small">К шаблонам</a>
+      </div>
+    </div>
+    <% if (saved) { %>
+      <div class="alert alert-success" role="status">Шаблон сохранён.</div>
+    <% } %>
+    <form class="admin-upload-form estimate-editor estimate-template" data-estimate-form
+          method="POST" action="/admin/estimates<%= estimate.id ? '/' + estimate.id : '' %>">
+      <p class="estimate-template-help">
+        Отметьте цену, количество или сумму как базовую ячейку для ручного ввода. Для остальных ячеек задайте формулы со знаком <code>=</code>.
+        Используйте адреса ячеек цены (D), количества (E) и суммы (F), например <code>=D4*E4</code>.
+      </p>
+      <div class="alert alert-error" role="alert" tabindex="-1" data-save-error hidden></div>
+      <div class="estimate-sheet">
+        <label class="estimate-sheet-title">Название шаблона
+          <input type="text" data-estimate-title value="<%= estimate.title %>" required>
+        </label>
+        <div class="estimate-table-scroll" tabindex="0" role="region" aria-label="Шаблон сметы">
+          <table class="estimate-table">
+            <colgroup>
+              <col class="estimate-col-index">
+              <col class="estimate-col-position">
+              <col>
+              <col class="estimate-col-unit">
+              <col class="estimate-col-number" span="3">
+              <col class="estimate-col-actions">
+            </colgroup>
+            <thead>
+              <tr class="estimate-column-letters" aria-hidden="true">
+                <td class="estimate-row-index"></td>
+                <% for (const letter of ['A', 'B', 'C', 'D', 'E', 'F', 'G']) { %>
+                  <td><%= letter %></td>
+                <% } %>
+              </tr>
+              <tr class="estimate-column-headings">
+                <th class="estimate-row-index" scope="row" data-sheet-row>1</th>
+                <th class="estimate-position-index" scope="col">№</th>
+                <th scope="col">Наименование</th>
+                <th scope="col">Ед. изм.</th>
+                <th scope="col">Цена</th>
+                <th scope="col">Количество</th>
+                <th scope="col">Сумма</th>
+                <th scope="col">Действия</th>
+              </tr>
+            </thead>
+            <tfoot data-estimate-footer>
+              <tr>
+                <th class="estimate-row-index" scope="row" data-sheet-row>2</th>
+                <td colspan="7">
+                  <% if (constructionStages.length) { %>
+                    <button class="btn btn-outline btn-small" type="button" data-add-stage>Добавить этап</button>
+                  <% } else { %>
+                    Добавьте этапы в разделе <a href="/admin/stages">«Этапы стройки»</a>.
+                  <% } %>
+                </td>
+              </tr>
+              <tr class="estimate-grand-total estimate-template-divider">
+                <th class="estimate-row-index" scope="row" data-sheet-row>3</th>
+                <td colspan="7"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="admin-form-actions">
+        <button class="btn btn-accent btn-small" type="submit">Сохранить шаблон</button>
+      </div>
+      <textarea data-estimate-data hidden><%= JSON.stringify(estimate) %></textarea>
+    </form>
+
+    <template id="estimate-stage-template">
+      <tbody class="estimate-stage">
+        <tr class="estimate-stage-heading">
+          <th class="estimate-row-index" scope="row" data-sheet-row></th>
+          <th scope="row" colspan="6">
+            <label class="estimate-stage-name">Этап
+              <select data-stage-id required>
+                <option value="" disabled selected>Выберите этап</option>
+                <% for (const stage of constructionStages) { %>
+                  <option value="<%= stage.id %>"><%= stage.title %></option>
+                <% } %>
+              </select>
+            </label>
+          </th>
+          <td><button class="btn btn-ghost btn-small" type="button" data-remove-stage>Удалить этап</button></td>
+        </tr>
+        <tr data-stage-actions>
+          <th class="estimate-row-index" scope="row" data-sheet-row></th>
+          <td colspan="7">
+            <button class="btn btn-outline btn-small" type="button" data-add-group="material">Добавить материалы</button>
+            <button class="btn btn-outline btn-small" type="button" data-add-group="work">Добавить работы</button>
+          </td>
+        </tr>
+        <tr class="estimate-stage-total estimate-template-divider">
+          <th class="estimate-row-index" scope="row" data-sheet-row></th>
+          <td colspan="7"></td>
+        </tr>
+      </tbody>
+    </template>
+
+    <template id="estimate-group-template">
+      <tr class="estimate-group-heading">
+        <th class="estimate-row-index" scope="row" data-sheet-row></th>
+        <th scope="row" colspan="6" data-group-title></th>
+        <td><button class="btn btn-ghost btn-small" type="button" data-remove-group>Удалить подблок</button></td>
+      </tr>
+      <tr class="estimate-group-total">
+        <th class="estimate-row-index" scope="row" data-sheet-row></th>
+        <td colspan="7"><button class="btn btn-outline btn-small" type="button" data-add-item>Добавить позицию</button></td>
+      </tr>
+    </template>
+
+    <template id="estimate-item-template">
+      <tr class="estimate-item">
+        <th class="estimate-row-index" scope="row" data-sheet-row></th>
+        <td class="estimate-position-index" data-item-number></td>
+        <td class="estimate-cell-input"><input type="text" data-item-field="title" aria-label="Наименование" required></td>
+        <td class="estimate-cell-input">
+          <select data-item-field="unit" aria-label="Единица измерения" required>
+            <option value="" disabled>Выберите единицу</option>
+            <%- include('../partials/estimate-unit-options', { estimateUnits }) %>
+          </select>
+        </td>
+        <% for (const column of [
+          { field: 'price', letter: 'D', label: 'цены' },
+          { field: 'quantity', letter: 'E', label: 'количества' },
+          { field: 'amount', letter: 'F', label: 'суммы' },
+        ]) { %>
+          <td class="estimate-cell-input estimate-formula-cell">
+            <label class="estimate-base-toggle">
+              <input type="checkbox" data-base-cell="<%= column.field %>" aria-label="Базовая ячейка <%= column.label %>">
+              Базовая
+            </label>
+            <input type="text" data-cell-formula="<%= column.field %>" data-column="<%= column.letter %>"
+                   aria-label="Формула <%= column.label %>" placeholder="=" spellcheck="false" autocomplete="off">
+          </td>
+        <% } %>
+        <td><button class="btn btn-ghost btn-small" type="button" data-remove-item aria-label="Удалить позицию">Удалить</button></td>
+      </tr>
+    </template>
+  </main>
+  <script src="/js/estimate-formulas.js"></script>
+  <script src="/js/estimate-editor.js"></script>
+</body>
+</html>
