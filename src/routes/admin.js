@@ -6,16 +6,18 @@ const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
 const rateLimit = require('express-rate-limit');
+const asyncRoute = require('../middleware/asyncRoute');
 const { getContent, saveContent } = require('../data/store');
 const { DEFAULT_HOME_HEADINGS, getHomeHeadings } = require('../data/homeHeadings');
+const { getHomePage } = require('../utils/homePage');
 const { getLeads, updateLeadStatus, updateLeadComment, deleteLead } = require('../data/leadsStore');
 const { getAdmin, verifyLogin, updateCredentials } = require('../data/adminStore');
 const {
   getEstimates, saveEstimate, getEstimateRuns, saveEstimateRun, getEstimateUnits, saveEstimateUnit,
 } = require('../data/estimatesStore');
 const {
-  EstimateValidationError, normalizeEstimateUnit, normalizeEstimateTemplate, asEstimateTemplate, getEstimateEditorDraft,
-  normalizeEstimateRun,
+  EstimateValidationError, normalizeEstimateUnit, normalizeEstimateTemplate, asEstimateTemplate, copyEstimateTemplate,
+  getEstimateEditorDraft, normalizeEstimateRun,
 } = require('../utils/estimates');
 const { buildEstimateWorkbook } = require('../utils/estimateWorkbook');
 const { buildProjectPdf } = require('../utils/projectPresentation');
@@ -24,13 +26,15 @@ const { isBaseCell } = require('../../public/js/estimate-formulas');
 const { requireAuth } = require('../middleware/auth');
 const { ICONS, DEFAULT_ICON } = require('../data/calcIcons');
 const { normalizeHouseParameters, getHouseParameterFields } = require('../utils/houseParameters');
+const { DEFAULT_PROJECT_COVER, projectMedia, portfolioMedia, stageGallery } = require('../utils/publicMedia');
 const {
   HouseInclusionsError, getHouseInclusions, normalizeHouseInclusions, updateHouseInclusionStage,
 } = require('../utils/houseInclusions');
 
 const STATUS_LABELS = { new: 'Новая', completed: 'Выполнена', rejected: 'Отклонена' };
+const ESTIMATE_TEMPLATE_CHANGED = 'Шаблон изменился. Откройте смету по актуальной версии шаблона.';
+const ESTIMATE_TEMPLATE_DUPLICATE = 'Шаблон с таким названием уже существует.';
 
-const DEFAULT_HOUSE_IMAGE = '/images/placeholder-new.svg';
 const UPLOAD_DIR = path.join(__dirname, '..', '..', 'public', 'uploads');
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 
@@ -49,7 +53,7 @@ const loginLimiter = rateLimit({
 // через "../" — сейчас imagePath всегда приходит из наших же данных, но
 // это дешёвая защита на случай, если логика когда-нибудь изменится.
 function deleteUploadedImage(imagePath) {
-  if (!imagePath || !imagePath.startsWith('/uploads/')) return;
+  if (typeof imagePath !== 'string' || !imagePath.startsWith('/uploads/')) return;
   const filePath = path.join(PUBLIC_DIR, imagePath);
   if (!filePath.startsWith(UPLOAD_DIR + path.sep)) return;
   fs.unlink(filePath, () => {}); // не страшно, если файла уже нет
@@ -59,9 +63,21 @@ function nextHouseId(houses) {
   return houses.reduce((max, h) => Math.max(max, Number(h.id) || 0), 0) + 1;
 }
 
-function attachmentName(prefix, title, extension) {
+function attachmentName(prefix, title, extension, suffix = '') {
   const safeTitle = Array.from(title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')).slice(0, 100).join('').trim();
-  return `${prefix} — ${Buffer.from(safeTitle).toString('utf8')}.${extension}`;
+  return `${prefix} — ${Buffer.from(safeTitle).toString('utf8')}${suffix}.${extension}`;
+}
+
+const exportDateFormat = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+
+function exportDateTime(date) {
+  const { year, month, day, hour, minute, second } = Object.fromEntries(
+    exportDateFormat.formatToParts(date).map(({ type, value }) => [type, value]),
+  );
+  return `${year}-${month}-${day}_${hour}-${minute}-${second}`;
 }
 
 // Характеристики дома редактируются одним textarea — по строке на пункт,
@@ -97,47 +113,51 @@ router.use('/estimates', requireAuth, (req, res, next) => {
   next();
 });
 
-router.get('/estimates', (req, res) => {
-  const estimates = getEstimates().map(({ id, title }) => ({ id, title }));
-  res.render('admin/estimates', { estimates, newRequestsCount: countNewLeads() });
-});
+async function renderEstimateList(res, templates, { status = 200, copyError = null } = {}) {
+  const estimates = templates.map(({ id, title }) => ({ id, title }));
+  return res.status(status).render('admin/estimates', { estimates, copyError, newRequestsCount: await countNewLeads() });
+}
 
-function renderEstimateEditor(req, res, estimate) {
-  const constructionStages = getContent().stages || [];
+router.get('/estimates', asyncRoute(async (req, res) => {
+  return renderEstimateList(res, await getEstimates());
+}));
+
+async function renderEstimateEditor(req, res, estimate) {
+  const constructionStages = (await getContent()).stages || [];
   res.render('admin/estimate-editor', {
     estimate: getEstimateEditorDraft(estimate, constructionStages),
     constructionStages,
-    estimateUnits: getEstimateUnits(),
+    estimateUnits: await getEstimateUnits(),
     saved: req.query.saved === '1',
-    newRequestsCount: countNewLeads(),
+    newRequestsCount: await countNewLeads(),
   });
 }
 
-router.get('/estimates/new', (req, res) => {
-  renderEstimateEditor(req, res, { title: '', stages: [] });
-});
+router.get('/estimates/new', asyncRoute(async (req, res) => {
+  return renderEstimateEditor(req, res, { title: '', stages: [] });
+}));
 
-router.get('/estimates/:id', (req, res) => {
-  const estimate = getEstimates().find((entry) => entry.id === req.params.id);
+router.get('/estimates/:id', asyncRoute(async (req, res) => {
+  const estimate = (await getEstimates()).find((entry) => entry.id === req.params.id);
   if (!estimate) return res.sendStatus(404);
-  renderEstimateEditor(req, res, estimate);
-});
+  return renderEstimateEditor(req, res, estimate);
+}));
 
-function persistEstimate(req, res) {
-  const existing = req.params.id && getEstimates().find((estimate) => estimate.id === req.params.id);
+async function persistEstimate(req, res) {
+  const existing = req.params.id && (await getEstimates()).find((estimate) => estimate.id === req.params.id);
   if (req.params.id && !existing) return res.status(404).json({ error: 'Шаблон не найден.' });
   let values;
   try {
-    values = normalizeEstimateTemplate(req.body, existing, getContent().stages || []);
+    values = normalizeEstimateTemplate(req.body, existing, (await getContent()).stages || []);
   } catch (error) {
     if (!(error instanceof EstimateValidationError)) throw error;
     return res.status(422).json({ error: error.message });
   }
 
-  const result = saveEstimate(req.params.id, req.body.revision, values);
+  const result = await saveEstimate(req.params.id, req.body.revision, values);
   if (result.status === 404) return res.status(404).json({ error: 'Шаблон не найден.' });
   if (result.duplicateTitle) {
-    return res.status(409).json({ error: 'Шаблон с таким названием уже существует.' });
+    return res.status(409).json({ error: ESTIMATE_TEMPLATE_DUPLICATE });
   }
   if (result.status === 409) {
     return res.status(409).json({
@@ -147,7 +167,31 @@ function persistEstimate(req, res) {
   res.status(req.params.id ? 200 : 201).json({ url: `/admin/estimates/${result.id}?saved=1` });
 }
 
-function persistEstimateUnit(req, res) {
+async function persistEstimateCopy(req, res) {
+  const templates = await getEstimates();
+  const source = templates.find((template) => template.id === req.params.id);
+  if (!source) return res.sendStatus(404);
+
+  const title = typeof req.body?.title === 'string' ? req.body.title : '';
+  let values;
+  try {
+    values = copyEstimateTemplate(source, title);
+  } catch (error) {
+    if (!(error instanceof EstimateValidationError)) throw error;
+    return renderEstimateList(res, templates, { status: 422, copyError: { id: source.id, title, message: error.message } });
+  }
+
+  const result = await saveEstimate(undefined, undefined, values);
+  if (result.duplicateTitle) {
+    return renderEstimateList(res, templates, {
+      status: 409,
+      copyError: { id: source.id, title, message: ESTIMATE_TEMPLATE_DUPLICATE },
+    });
+  }
+  return res.redirect(303, `/admin/estimates/${result.id}?saved=1`);
+}
+
+async function persistEstimateUnit(req, res) {
   let unit;
   try {
     unit = normalizeEstimateUnit(req.body);
@@ -155,65 +199,66 @@ function persistEstimateUnit(req, res) {
     if (!(error instanceof EstimateValidationError)) throw error;
     return renderPageError(req, res, 'calculatorDirectory', error.message);
   }
-  const status = saveEstimateUnit(req.params.id, unit);
+  const status = await saveEstimateUnit(req.params.id, unit);
   if (status === 404) return res.sendStatus(404);
   if (status === 409) return renderPageError(req, res, 'calculatorDirectory', 'Такое обозначение уже есть в справочнике.');
   res.redirect('/admin/calculator/directory?saved=1#estimate-units');
 }
 
-router.post('/estimates/units', persistEstimateUnit);
-router.post('/estimates/units/:id', persistEstimateUnit);
-router.post('/estimates', persistEstimate);
-router.post('/estimates/:id', persistEstimate);
+router.post('/estimates/units', asyncRoute(persistEstimateUnit));
+router.post('/estimates/units/:id', asyncRoute(persistEstimateUnit));
+router.post('/estimates/:id/copy', asyncRoute(persistEstimateCopy));
+router.post('/estimates', asyncRoute(persistEstimate));
+router.post('/estimates/:id', asyncRoute(persistEstimate));
 
 router.use('/estimate-runs', requireAuth);
 
-router.get('/estimate-runs', (req, res) => {
-  const templates = getEstimates().map(({ id, title }) => ({ id, title }));
-  const runs = getEstimateRuns().map(({ id, title, totalCents }) => ({
+router.get('/estimate-runs', asyncRoute(async (req, res) => {
+  const templates = (await getEstimates()).map(({ id, title }) => ({ id, title }));
+  const runs = (await getEstimateRuns()).map(({ id, title, totalCents }) => ({
     id, title, total: formatTotal(BigInt(totalCents)),
   }));
-  res.render('admin/estimate-runs', { templates, runs, newRequestsCount: countNewLeads() });
-});
+  res.render('admin/estimate-runs', { templates, runs, newRequestsCount: await countNewLeads() });
+}));
 
-function renderEstimateRun(req, res, template, run) {
+async function renderEstimateRun(req, res, template, run) {
   res.render('admin/estimate-run-editor', {
     template,
     run,
     isBaseCell,
     saved: req.query.saved === '1',
-    newRequestsCount: countNewLeads(),
+    newRequestsCount: await countNewLeads(),
   });
 }
 
-router.get('/estimate-runs/new', (req, res) => {
-  const template = getEstimates().find((entry) => entry.id === req.query.template);
+router.get('/estimate-runs/new', asyncRoute(async (req, res) => {
+  const template = (await getEstimates()).find((entry) => entry.id === req.query.template);
   if (!template) return res.sendStatus(404);
   const prepared = asEstimateTemplate(template);
-  renderEstimateRun(req, res, prepared, { title: '', entries: {} });
-});
+  return renderEstimateRun(req, res, prepared, { title: '', entries: {} });
+}));
 
 router.get('/estimate-runs/:id/export.xlsx', async (req, res, next) => {
   try {
-    const run = getEstimateRuns().find((entry) => entry.id === req.params.id);
+    const run = (await getEstimateRuns()).find((entry) => entry.id === req.params.id);
     if (!run) return res.sendStatus(404);
-    const workbook = buildEstimateWorkbook(run);
+    const workbook = buildEstimateWorkbook(run, { includeAppendices: true });
     const buffer = await workbook.xlsx.writeBuffer();
     res.set('Cache-Control', 'private, no-store');
-    res.attachment(attachmentName('Смета', run.title, 'xlsx'));
+    res.attachment(attachmentName('Смета', run.title, 'xlsx', ` — ${exportDateTime(new Date())}`));
     return res.send(buffer);
   } catch (error) {
     return next(error);
   }
 });
 
-router.get('/estimate-runs/:id', (req, res) => {
-  const run = getEstimateRuns().find((entry) => entry.id === req.params.id);
+router.get('/estimate-runs/:id', asyncRoute(async (req, res) => {
+  const run = (await getEstimateRuns()).find((entry) => entry.id === req.params.id);
   if (!run) return res.sendStatus(404);
-  renderEstimateRun(req, res, run.template, run);
-});
+  return renderEstimateRun(req, res, run.template, run);
+}));
 
-function persistEstimateRun(req, res) {
+async function persistEstimateRun(req, res) {
   const draft = req.body;
   if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
     return res.status(422).json({ error: 'Проверьте структуру данных сметы.' });
@@ -225,12 +270,12 @@ function persistEstimateRun(req, res) {
     return res.status(422).json({ error: 'В расчёте можно менять название и значения базовых ячеек.' });
   }
 
-  const existing = req.params.id && getEstimateRuns().find((entry) => entry.id === req.params.id);
+  const existing = req.params.id && (await getEstimateRuns()).find((entry) => entry.id === req.params.id);
   if (req.params.id && !existing) return res.status(404).json({ error: 'Смета не найдена.' });
-  const template = existing?.template || getEstimates().find((entry) => entry.id === draft.templateId);
+  const template = existing?.template || (await getEstimates()).find((entry) => entry.id === draft.templateId);
   if (!template) return res.status(404).json({ error: 'Шаблон не найден.' });
   if (!existing && template.revision !== draft.templateRevision) {
-    return res.status(409).json({ error: 'Шаблон изменился. Откройте смету по актуальной версии шаблона.' });
+    return res.status(409).json({ error: ESTIMATE_TEMPLATE_CHANGED });
   }
 
   let values;
@@ -239,13 +284,18 @@ function persistEstimateRun(req, res) {
     values = {
       template: prepared,
       ...normalizeEstimateRun(draft, prepared),
+      ...(existing?.referencePaymentSchedule && { referencePaymentSchedule: existing.referencePaymentSchedule }),
+      ...(existing?.referenceConstructionSchedule && { referenceConstructionSchedule: existing.referenceConstructionSchedule }),
+      ...(existing?.referenceProfit && { referenceProfit: existing.referenceProfit }),
     };
   } catch (error) {
     if (!(error instanceof EstimateValidationError)) throw error;
     return res.status(422).json({ error: error.message });
   }
 
-  const result = saveEstimateRun(req.params.id, draft.revision, values);
+  const result = await saveEstimateRun(req.params.id, draft.revision, values);
+  if (result.templateMissing) return res.status(404).json({ error: 'Шаблон не найден.' });
+  if (result.templateChanged) return res.status(409).json({ error: ESTIMATE_TEMPLATE_CHANGED });
   if (result.status === 404) return res.status(404).json({ error: 'Смета не найдена.' });
   if (result.duplicateTitle) {
     return res.status(409).json({ error: 'Расчёт с таким названием уже существует.' });
@@ -254,8 +304,8 @@ function persistEstimateRun(req, res) {
   res.status(req.params.id ? 200 : 201).json({ url: `/admin/estimate-runs/${result.id}?saved=1` });
 }
 
-router.post('/estimate-runs', persistEstimateRun);
-router.post('/estimate-runs/:id', persistEstimateRun);
+router.post('/estimate-runs', asyncRoute(persistEstimateRun));
+router.post('/estimate-runs/:id', asyncRoute(persistEstimateRun));
 
 // Расширение сохранённого файла берём из проверенного MIME-типа, а не из
 // имени файла, которое прислал браузер — оно полностью подконтрольно
@@ -292,6 +342,20 @@ const upload = multer({
   },
 });
 
+function withUpload(middleware, handler) {
+  return asyncRoute(async (req, res) => {
+    try {
+      const error = await new Promise((resolve) => middleware(req, res, resolve));
+      await handler(req, res, error);
+    } finally {
+      if (!res.headersSent || res.statusCode >= 400) {
+        const files = req.file ? [req.file] : req.files || [];
+        for (const file of files) deleteUploadedImage(`/uploads/${file.filename}`);
+      }
+    }
+  });
+}
+
 // ---- Вход / выход ----
 
 router.get('/login', (req, res) => {
@@ -299,9 +363,9 @@ router.get('/login', (req, res) => {
   res.render('admin/login', { error: null });
 });
 
-router.post('/login', loginLimiter, (req, res, next) => {
+router.post('/login', loginLimiter, asyncRoute(async (req, res, next) => {
   const { username, password } = req.body;
-  const role = verifyLogin(username, password);
+  const role = await verifyLogin(username, password);
   if (role) {
     const redirectTo = req.session.redirectTo || '/admin';
     return req.session.regenerate((error) => {
@@ -312,7 +376,7 @@ router.post('/login', loginLimiter, (req, res, next) => {
     });
   }
   res.status(401).render('admin/login', { error: 'Неверный логин или пароль' });
-});
+}));
 
 router.post('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/admin/login'));
@@ -320,8 +384,8 @@ router.post('/logout', (req, res) => {
 
 // ---- Панель управления (всё, что ниже, требует входа) ----
 
-function countNewLeads() {
-  return getLeads().filter((l) => l.status === 'new').length;
+async function countNewLeads() {
+  return (await getLeads()).filter((l) => l.status === 'new').length;
 }
 
 // Админка разбита на страницы по блокам сайта. Для каждой страницы —
@@ -336,77 +400,101 @@ const CONTENT_PAGES = {
   calculatorDirectory: 'admin/calculator-directory',
 };
 
-function renderContentPage(req, res, page, { error = null, status = 200 } = {}) {
-  const content = getContent();
+async function renderContentPage(req, res, page, { error = null, status = 200 } = {}) {
+  const content = await getContent();
   res.status(status).render(CONTENT_PAGES[page], {
     content,
-    estimateUnits: page === 'calculatorDirectory' && res.locals.isSuperadmin ? getEstimateUnits() : [],
-    estimateRuns: page === 'houses' ? getEstimateRuns().map(({ id, title }) => ({ id, title })) : [],
-    homeHeadings: getHomeHeadings(content),
+    estimateUnits: page === 'calculatorDirectory' && res.locals.isSuperadmin ? await getEstimateUnits() : [],
+    estimateRuns: page === 'houses' ? (await getEstimateRuns()).map(({ id, title }) => ({ id, title })) : [],
+    homepage: page === 'home' ? getHomePage(content) : null,
     saved: !error && req.query.saved === '1',
     error,
-    newRequestsCount: countNewLeads(),
+    newRequestsCount: await countNewLeads(),
     icons: ICONS,
     getHouseParameterFields,
+    projectMedia,
+    portfolioMedia,
+    stageGallery,
   });
 }
 
 router.get('/', requireAuth, (req, res) => res.redirect('/admin/houses'));
-router.get('/houses', requireAuth, (req, res) => renderContentPage(req, res, 'houses'));
-router.get('/home', requireAuth, (req, res) => renderContentPage(req, res, 'home'));
-router.post('/home/headings', requireAuth, (req, res) => {
+router.get('/houses', requireAuth, asyncRoute((req, res) => renderContentPage(req, res, 'houses')));
+router.get('/home', requireAuth, asyncRoute((req, res) => renderContentPage(req, res, 'home')));
+router.post('/home/headings', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
+  const current = getHomeHeadings(content);
+  const existingFields = new Set(['advantages', 'projects', 'request']);
   const headings = Object.entries(DEFAULT_HOME_HEADINGS).map(([key]) => {
     const value = req.body?.[key];
+    // Формы, открытые до появления новых блоков, присылают три поля.
+    if (value === undefined && !existingFields.has(key)) return [key, current[key]];
     return [key, typeof value === 'string' ? value.trim() : ''];
   });
   if (headings.some(([, value]) => !value)) {
     return renderPageError(req, res, 'home', 'Заполните все заголовки блоков.');
   }
 
-  const content = getContent();
   content.homeHeadings = Object.fromEntries(headings);
-  saveContent(content);
+  await saveContent(content);
   res.redirect('/admin/home?saved=1');
-});
-router.get('/contacts', requireAuth, (req, res) => renderContentPage(req, res, 'contacts'));
-router.get('/portfolio', requireAuth, (req, res) => renderContentPage(req, res, 'portfolio'));
-router.get('/stages', requireAuth, (req, res) => renderContentPage(req, res, 'stages'));
-router.get('/calculator', requireAuth, (req, res) => renderContentPage(req, res, 'calculator'));
-router.get('/calculator/directory', requireAuth, (req, res) => renderContentPage(req, res, 'calculatorDirectory'));
+}));
+router.post('/home/design', requireAuth, withUpload(upload.single('image'), async (req, res, err) => {
+  if (err) return renderPageError(req, res, 'home', err.message);
+
+  const text = req.body?.text;
+  const newImage = req.file ? `/uploads/${req.file.filename}` : null;
+  if (typeof text !== 'string') {
+    return renderPageError(req, res, 'home', 'Проверьте текст блока проектирования.');
+  }
+
+  const content = await getContent();
+  const previousImage = content.homeDesign?.image;
+  content.homeDesign = { ...content.homeDesign, text: text.trim() };
+  if (newImage) content.homeDesign.image = newImage;
+  await saveContent(content);
+  if (newImage) deleteUploadedImage(previousImage);
+  res.redirect('/admin/home?saved=1');
+}));
+router.get('/contacts', requireAuth, asyncRoute((req, res) => renderContentPage(req, res, 'contacts')));
+router.get('/portfolio', requireAuth, asyncRoute((req, res) => renderContentPage(req, res, 'portfolio')));
+router.get('/stages', requireAuth, asyncRoute((req, res) => renderContentPage(req, res, 'stages')));
+router.get('/calculator', requireAuth, asyncRoute((req, res) => renderContentPage(req, res, 'calculator')));
+router.get('/calculator/directory', requireAuth, asyncRoute((req, res) => renderContentPage(req, res, 'calculatorDirectory')));
 
 // ---- Обращения (заявки с формы на сайте) ----
 
-router.get('/requests', requireAuth, (req, res) => {
-  const leads = getLeads();
+router.get('/requests', requireAuth, asyncRoute(async (req, res) => {
+  const leads = await getLeads();
   res.render('admin/requests', {
     leads,
-    newRequestsCount: countNewLeads(),
+    newRequestsCount: leads.filter((lead) => lead.status === 'new').length,
   });
-});
+}));
 
-router.post('/requests/:id/status', requireAuth, (req, res) => {
+router.post('/requests/:id/status', requireAuth, asyncRoute(async (req, res) => {
   const { status } = req.body;
-  updateLeadStatus(req.params.id, status);
+  await updateLeadStatus(req.params.id, status);
   res.redirect('/admin/requests');
-});
+}));
 
-router.post('/requests/:id/comment', requireAuth, (req, res) => {
+router.post('/requests/:id/comment', requireAuth, asyncRoute(async (req, res) => {
   const { comment } = req.body;
-  updateLeadComment(req.params.id, (comment || '').trim());
+  await updateLeadComment(req.params.id, (comment || '').trim());
   res.redirect('/admin/requests');
-});
+}));
 
-router.post('/requests/:id/delete', requireAuth, (req, res) => {
-  deleteLead(req.params.id);
+router.post('/requests/:id/delete', requireAuth, asyncRoute(async (req, res) => {
+  await deleteLead(req.params.id);
   res.redirect('/admin/requests');
-});
+}));
 
 // Выгрузка всех обращений в Excel (.xlsx)
 // Express 4 не ловит отклонённые промисы сам — оборачиваем в try/catch
 // и передаём ошибку дальше через next(), иначе она уйдёт "в никуда".
 router.get('/requests/export.xlsx', requireAuth, async (req, res, next) => {
   try {
-    const leads = getLeads();
+    const leads = await getLeads();
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Обращения');
@@ -445,31 +533,31 @@ router.get('/requests/export.xlsx', requireAuth, async (req, res, next) => {
 
 // ---- Настройки: смена логина и пароля администратора ----
 
-router.get('/settings', requireAuth, (req, res) => {
-  const admin = getAdmin(req.session.adminRole);
+router.get('/settings', requireAuth, asyncRoute(async (req, res) => {
+  const admin = await getAdmin(req.session.adminRole);
   res.render('admin/settings', {
     username: admin.username,
     error: null,
     saved: req.query.saved === '1',
-    newRequestsCount: countNewLeads(),
+    newRequestsCount: await countNewLeads(),
   });
-});
+}));
 
-router.post('/settings/credentials', requireAuth, (req, res) => {
+router.post('/settings/credentials', requireAuth, asyncRoute(async (req, res) => {
   const { currentPassword, newUsername, newPassword, newPasswordConfirm } = req.body;
   const role = req.session.adminRole || 'admin';
-  const admin = getAdmin(role);
+  const admin = await getAdmin(role);
 
-  function fail(message) {
+  async function fail(message) {
     res.status(400).render('admin/settings', {
       username: admin.username,
       error: message,
       saved: false,
-      newRequestsCount: countNewLeads(),
+      newRequestsCount: await countNewLeads(),
     });
   }
 
-  if (verifyLogin(admin.username, currentPassword) !== role) {
+  if (await verifyLogin(admin.username, currentPassword) !== role) {
     return fail('Текущий пароль указан неверно');
   }
   if (typeof newUsername !== 'string' || !newUsername.trim()) {
@@ -485,78 +573,77 @@ router.post('/settings/credentials', requireAuth, (req, res) => {
     }
   }
 
-  const updated = updateCredentials(role, {
+  const updated = await updateCredentials(role, {
     username: newUsername,
     password: wantsPasswordChange ? newPassword : undefined,
+    currentPassword,
   });
+  if (updated === 'invalid-current-password') return fail('Текущий пароль указан неверно');
   if (!updated) return fail('Этот логин уже занят');
   res.redirect('/admin/settings?saved=1');
-});
+}));
 
 // Загрузка/замена картинки hero-баннера
-router.post('/hero', requireAuth, (req, res) => {
-  upload.single('image')(req, res, (err) => {
-    if (err) return renderPageError(req, res, 'home', err.message);
+router.post('/hero', requireAuth, withUpload(upload.single('image'), async (req, res, err) => {
+  if (err) return renderPageError(req, res, 'home', err.message);
 
-    const { title, subtitle } = req.body;
-    if (!title || !title.trim()) {
-      if (req.file) deleteUploadedImage(`/uploads/${req.file.filename}`);
-      return renderPageError(req, res, 'home', 'Заголовок не может быть пустым');
-    }
+  const { title, subtitle } = req.body;
+  if (!title || !title.trim()) {
+    return renderPageError(req, res, 'home', 'Заголовок не может быть пустым');
+  }
 
-    const content = getContent();
-    content.hero.title = title.trim();
-    content.hero.subtitle = (subtitle || '').trim();
-    if (req.file) {
-      deleteUploadedImage(content.hero.image);
-      content.hero.image = `/uploads/${req.file.filename}`;
-    }
+  const content = await getContent();
+  content.hero.title = title.trim();
+  content.hero.subtitle = (subtitle || '').trim();
+  const previousImage = content.hero.image;
+  if (req.file) {
+    content.hero.image = `/uploads/${req.file.filename}`;
+  }
 
-    saveContent(content);
-    res.redirect('/admin/home?saved=1');
-  });
-});
+  await saveContent(content);
+  if (req.file) deleteUploadedImage(previousImage);
+  res.redirect('/admin/home?saved=1');
+}));
 
 // Правка одного пункта блока «Преимущества» (текст + картинка)
-router.post('/advantage/:id', requireAuth, (req, res) => {
-  upload.single('image')(req, res, (err) => {
-    if (err) return renderPageError(req, res, 'home', err.message);
+router.post('/advantage/:id', requireAuth, withUpload(upload.single('image'), async (req, res, err) => {
+  if (err) return renderPageError(req, res, 'home', err.message);
 
-    const content = getContent();
-    const advantage = content.advantages.find((a) => String(a.id) === req.params.id);
-    if (!advantage) return renderPageError(req, res, 'home', 'Пункт преимуществ не найден');
+  const content = await getContent();
+  const advantage = content.advantages.find((a) => String(a.id) === req.params.id);
+  if (!advantage) return renderPageError(req, res, 'home', 'Пункт преимуществ не найден');
 
-    const { title, text } = req.body;
-    if (title) advantage.title = title;
-    if (text) advantage.text = text;
-    if (req.file) {
-      deleteUploadedImage(advantage.image);
-      advantage.image = `/uploads/${req.file.filename}`;
-    }
+  const { title, text } = req.body;
+  if (title) advantage.title = title;
+  if (text) advantage.text = text;
+  const previousImage = advantage.image;
+  if (req.file) {
+    advantage.image = `/uploads/${req.file.filename}`;
+  }
 
-    saveContent(content);
-    res.redirect('/admin/home?saved=1');
-  });
-});
+  await saveContent(content);
+  if (req.file) deleteUploadedImage(previousImage);
+  res.redirect('/admin/home?saved=1');
+}));
 
 // Правка контактной информации (телефон, e-mail, адрес)
-router.post('/contacts', requireAuth, (req, res) => {
+router.post('/contacts', requireAuth, asyncRoute(async (req, res) => {
   const { phone, email, address } = req.body;
   if (!phone || !phone.trim()) {
     return renderPageError(req, res, 'contacts', 'Укажите телефон');
   }
 
-  const content = getContent();
+  const content = await getContent();
   content.contacts.phone = phone.trim();
   content.contacts.email = (email || '').trim();
   content.contacts.address = (address || '').trim();
-  saveContent(content);
+  await saveContent(content);
   res.redirect('/admin/contacts?saved=1');
-});
+}));
 
-function isValidEstimateRunSelection(id) {
+async function isValidEstimateRunSelection(id) {
   return id === undefined || id === ''
-    || (typeof id === 'string' && getEstimateRuns().some((run) => run.id === id));
+    || (typeof id === 'string' && (await getEstimateRuns()).some((run) => run.id === id));
 }
 
 function setHouseEstimateRun(house, id) {
@@ -566,13 +653,13 @@ function setHouseEstimateRun(house, id) {
 
 router.get('/house/:id/presentation.zip', requireAuth, async (req, res, next) => {
   try {
-    const content = getContent();
+    const content = await getContent();
     const house = content.houses.find((entry) => String(entry.id) === req.params.id);
     if (!house) return res.sendStatus(404);
 
-    const run = house.estimateRunId && getEstimateRuns().find((entry) => entry.id === house.estimateRunId);
+    const run = house.estimateRunId && (await getEstimateRuns()).find((entry) => entry.id === house.estimateRunId);
     if (house.estimateRunId && !run) {
-      return renderContentPage(req, res, 'houses', {
+      return await renderContentPage(req, res, 'houses', {
         error: 'Закреплённый расчёт не найден. Выберите сохранённый расчёт в карточке проекта.',
         status: 409,
       });
@@ -595,23 +682,23 @@ router.get('/house/:id/presentation.zip', requireAuth, async (req, res, next) =>
   }
 });
 
-router.post('/house/:id/estimate', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/house/:id/estimate', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const house = content.houses.find((entry) => String(entry.id) === req.params.id);
   if (!house) return renderPageError(req, res, 'houses', 'Дом не найден');
 
   const id = req.body?.estimateRunId;
-  if (typeof id !== 'string' || !isValidEstimateRunSelection(id)) {
+  if (typeof id !== 'string' || !await isValidEstimateRunSelection(id)) {
     return renderPageError(req, res, 'houses', 'Выберите сохранённый расчёт или пункт «Без расчёта».');
   }
 
   setHouseEstimateRun(house, id);
-  saveContent(content);
+  await saveContent(content);
   res.redirect(`/admin/houses?saved=1&open=${encodeURIComponent(house.id)}`);
-});
+}));
 
-router.get('/house/:id/inclusions', requireAuth, (req, res) => {
-  const { houses, stages } = getContent();
+router.get('/house/:id/inclusions', requireAuth, asyncRoute(async (req, res) => {
+  const { houses, stages } = await getContent();
   const house = houses.find((entry) => String(entry.id) === req.params.id);
   if (!house) return res.sendStatus(404);
 
@@ -620,12 +707,12 @@ router.get('/house/:id/inclusions', requireAuth, (req, res) => {
     stages: stages || [],
     inclusions: getHouseInclusions(house, stages),
     saved: req.query.saved === '1',
-    newRequestsCount: countNewLeads(),
+    newRequestsCount: await countNewLeads(),
   });
-});
+}));
 
-router.post('/house/:id/inclusions', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/house/:id/inclusions', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const house = content.houses.find((entry) => String(entry.id) === req.params.id);
   if (!house) return res.status(404).json({ error: 'Проект не найден.' });
 
@@ -636,108 +723,100 @@ router.post('/house/:id/inclusions', requireAuth, (req, res) => {
     return res.status(422).json({ error: error.message });
   }
 
-  saveContent(content);
+  await saveContent(content);
   res.json({ url: `/admin/house/${encodeURIComponent(house.id)}/inclusions?saved=1` });
-});
+}));
 
 // Добавление нового дома
-router.post('/house', requireAuth, (req, res) => {
-  upload.single('image')(req, res, (err) => {
-    if (err) return renderPageError(req, res, 'houses', err.message);
+router.post('/house', requireAuth, withUpload(upload.single('image'), async (req, res, err) => {
+  if (err) return renderPageError(req, res, 'houses', err.message);
 
-    const { title, area, price, description, fullDescription, specs, estimateRunId } = req.body;
-    if (!title || !title.trim()) {
-      if (req.file) deleteUploadedImage(`/uploads/${req.file.filename}`);
-      return renderPageError(req, res, 'houses', 'Укажите название дома');
-    }
-    if (!isValidEstimateRunSelection(estimateRunId)) {
-      if (req.file) deleteUploadedImage(`/uploads/${req.file.filename}`);
-      return renderPageError(req, res, 'houses', 'Выбранный расчёт сметы не найден.');
-    }
+  const { title, area, price, description, fullDescription, specs, estimateRunId } = req.body;
+  if (!title || !title.trim()) {
+    return renderPageError(req, res, 'houses', 'Укажите название дома');
+  }
+  if (!await isValidEstimateRunSelection(estimateRunId)) {
+    return renderPageError(req, res, 'houses', 'Выбранный расчёт сметы не найден.');
+  }
 
-    const content = getContent();
-    const house = {
-      id: nextHouseId(content.houses),
-      title: title.trim(),
-      area: (area || '').trim(),
-      price: (price || '').trim(),
-      description: (description || '').trim(),
-      fullDescription: (fullDescription || '').trim(),
-      image: req.file ? `/uploads/${req.file.filename}` : DEFAULT_HOUSE_IMAGE,
-      gallery: [],
-      specs: parseSpecs(specs),
-      parameters: normalizeHouseParameters(content.calculator, req.body.parameters),
-      showOnHome: req.body.showOnHome === '1',
-      ...(estimateRunId ? { estimateRunId } : {}),
-    };
-    content.houses.push(house);
-    saveContent(content);
-    res.redirect(`/admin/houses?saved=1&open=${encodeURIComponent(house.id)}`);
-  });
-});
+  const content = await getContent();
+  const house = {
+    id: nextHouseId(content.houses),
+    title: title.trim(),
+    area: (area || '').trim(),
+    price: (price || '').trim(),
+    description: (description || '').trim(),
+    fullDescription: (fullDescription || '').trim(),
+    image: req.file ? `/uploads/${req.file.filename}` : DEFAULT_PROJECT_COVER,
+    gallery: [],
+    specs: parseSpecs(specs),
+    parameters: normalizeHouseParameters(content.calculator, req.body.parameters),
+    showOnHome: req.body.showOnHome === '1',
+    ...(estimateRunId ? { estimateRunId } : {}),
+  };
+  content.houses.push(house);
+  await saveContent(content);
+  res.redirect(`/admin/houses?saved=1&open=${encodeURIComponent(house.id)}`);
+}));
 
 // Загрузка/замена картинки конкретного дома + правка текстовых полей
-router.post('/house/:id', requireAuth, (req, res) => {
-  upload.single('image')(req, res, (err) => {
-    if (err) return renderPageError(req, res, 'houses', err.message);
+router.post('/house/:id', requireAuth, withUpload(upload.single('image'), async (req, res, err) => {
+  if (err) return renderPageError(req, res, 'houses', err.message);
 
-    const content = getContent();
-    const house = content.houses.find((h) => String(h.id) === req.params.id);
-    if (!house) return renderPageError(req, res, 'houses', 'Дом не найден');
+  const content = await getContent();
+  const house = content.houses.find((h) => String(h.id) === req.params.id);
+  if (!house) return renderPageError(req, res, 'houses', 'Дом не найден');
 
-    const { title, area, price, description, fullDescription, specs, estimateRunId } = req.body;
-    if (!isValidEstimateRunSelection(estimateRunId)) {
-      if (req.file) deleteUploadedImage(`/uploads/${req.file.filename}`);
-      return renderPageError(req, res, 'houses', 'Выбранный расчёт сметы не найден.');
-    }
-    if (title) house.title = title;
-    if (area) house.area = area;
-    if (price) house.price = price;
-    if (description) house.description = description;
-    if (fullDescription !== undefined) house.fullDescription = fullDescription.trim();
-    if (specs !== undefined) house.specs = parseSpecs(specs);
-    if (req.body.parametersPresent === '1') {
-      house.parameters = normalizeHouseParameters(content.calculator, req.body.parameters);
-    }
-    setHouseEstimateRun(house, estimateRunId);
-    // Снятая галочка в форму не отправляется вовсе, поэтому ориентируемся на
-    // скрытый маркер: он говорит, что поле в форме было, и тогда отсутствие
-    // showOnHome означает «убрать с главной».
-    if (req.body.showOnHomeField === '1') house.showOnHome = req.body.showOnHome === '1';
-    if (req.file) {
-      deleteUploadedImage(house.image);
-      house.image = `/uploads/${req.file.filename}`;
-    }
+  const { title, area, price, description, fullDescription, specs, estimateRunId } = req.body;
+  if (!await isValidEstimateRunSelection(estimateRunId)) {
+    return renderPageError(req, res, 'houses', 'Выбранный расчёт сметы не найден.');
+  }
+  if (title) house.title = title;
+  if (area) house.area = area;
+  if (price) house.price = price;
+  if (description) house.description = description;
+  if (fullDescription !== undefined) house.fullDescription = fullDescription.trim();
+  if (specs !== undefined) house.specs = parseSpecs(specs);
+  if (req.body.parametersPresent === '1') {
+    house.parameters = normalizeHouseParameters(content.calculator, req.body.parameters);
+  }
+  setHouseEstimateRun(house, estimateRunId);
+  // Снятая галочка в форму не отправляется вовсе, поэтому ориентируемся на
+  // скрытый маркер: он говорит, что поле в форме было, и тогда отсутствие
+  // showOnHome означает «убрать с главной».
+  if (req.body.showOnHomeField === '1') house.showOnHome = req.body.showOnHome === '1';
+  const previousImage = house.image;
+  if (req.file) {
+    house.image = `/uploads/${req.file.filename}`;
+  }
 
-    saveContent(content);
-    res.redirect('/admin/houses?saved=1');
-  });
-});
+  await saveContent(content);
+  if (req.file) deleteUploadedImage(previousImage);
+  res.redirect('/admin/houses?saved=1');
+}));
 
 // Добавление фотографий в галерею дома (можно выбрать сразу несколько файлов)
-router.post('/house/:id/gallery', requireAuth, (req, res) => {
-  upload.array('images', 10)(req, res, (err) => {
-    if (err) return renderPageError(req, res, 'houses', err.message);
+router.post('/house/:id/gallery', requireAuth, withUpload(upload.array('images', 10), async (req, res, err) => {
+  if (err) return renderPageError(req, res, 'houses', err.message);
 
-    const content = getContent();
-    const house = content.houses.find((h) => String(h.id) === req.params.id);
-    if (!house) return renderPageError(req, res, 'houses', 'Дом не найден');
+  const content = await getContent();
+  const house = content.houses.find((h) => String(h.id) === req.params.id);
+  if (!house) return renderPageError(req, res, 'houses', 'Дом не найден');
 
-    if (!req.files || req.files.length === 0) {
-      return renderPageError(req, res, 'houses', 'Выберите хотя бы одну фотографию');
-    }
+  if (!req.files || req.files.length === 0) {
+    return renderPageError(req, res, 'houses', 'Выберите хотя бы одну фотографию');
+  }
 
-    if (!house.gallery) house.gallery = [];
-    house.gallery.push(...req.files.map((f) => `/uploads/${f.filename}`));
+  if (!house.gallery) house.gallery = [];
+  house.gallery.push(...req.files.map((f) => `/uploads/${f.filename}`));
 
-    saveContent(content);
-    res.redirect('/admin/houses?saved=1');
-  });
-});
+  await saveContent(content);
+  res.redirect('/admin/houses?saved=1');
+}));
 
 // Удаление одной фотографии из галереи дома
-router.post('/house/:id/gallery/:index/delete', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/house/:id/gallery/:index/delete', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const house = content.houses.find((h) => String(h.id) === req.params.id);
   if (!house) return renderPageError(req, res, 'houses', 'Дом не найден');
 
@@ -747,23 +826,23 @@ router.post('/house/:id/gallery/:index/delete', requireAuth, (req, res) => {
   }
 
   const [removed] = house.gallery.splice(index, 1);
+  await saveContent(content);
   deleteUploadedImage(removed);
-  saveContent(content);
   res.redirect('/admin/houses?saved=1');
-});
+}));
 
 // Удаление дома
-router.post('/house/:id/delete', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/house/:id/delete', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const index = content.houses.findIndex((h) => String(h.id) === req.params.id);
   if (index === -1) return renderPageError(req, res, 'houses', 'Дом не найден');
 
   const [removed] = content.houses.splice(index, 1);
+  await saveContent(content);
   deleteUploadedImage(removed.image);
   (removed.gallery || []).forEach(deleteUploadedImage);
-  saveContent(content);
   res.redirect('/admin/houses?saved=1');
-});
+}));
 
 // ---- Портфолио (реализованные объекты: фото, описание, стоимость, адрес) ----
 
@@ -776,37 +855,34 @@ function portfolioRedirect(res, id) {
 }
 
 // Новый объект: текстовые поля + сразу можно загрузить пачку фото.
-router.post('/portfolio', requireAuth, (req, res) => {
-  upload.array('photos', 30)(req, res, (err) => {
-    if (err) return renderPageError(req, res, 'portfolio', err.message);
+router.post('/portfolio', requireAuth, withUpload(upload.array('photos', 30), async (req, res, err) => {
+  if (err) return renderPageError(req, res, 'portfolio', err.message);
 
-    const uploaded = (req.files || []).map((f) => `/uploads/${f.filename}`);
-    const { title, price, address, description } = req.body;
-    if (!title || !title.trim()) {
-      uploaded.forEach(deleteUploadedImage);
-      return renderPageError(req, res, 'portfolio', 'Укажите название объекта');
-    }
+  const uploaded = (req.files || []).map((f) => `/uploads/${f.filename}`);
+  const { title, price, address, description } = req.body;
+  if (!title || !title.trim()) {
+    return renderPageError(req, res, 'portfolio', 'Укажите название объекта');
+  }
 
-    const content = getContent();
-    if (!Array.isArray(content.portfolio)) content.portfolio = [];
-    const item = {
-      id: nextHouseId(content.portfolio),
-      title: title.trim(),
-      price: (price || '').trim(),
-      address: (address || '').trim(),
-      description: (description || '').trim(),
-      photos: uploaded,
-    };
-    content.portfolio.push(item);
-    saveContent(content);
-    portfolioRedirect(res, item.id);
-  });
-});
+  const content = await getContent();
+  if (!Array.isArray(content.portfolio)) content.portfolio = [];
+  const item = {
+    id: nextHouseId(content.portfolio),
+    title: title.trim(),
+    price: (price || '').trim(),
+    address: (address || '').trim(),
+    description: (description || '').trim(),
+    photos: uploaded,
+  };
+  content.portfolio.push(item);
+  await saveContent(content);
+  portfolioRedirect(res, item.id);
+}));
 
 // Правка текстовых полей объекта. Пустые поля (кроме названия) можно
 // очистить намеренно — например, убрать цену.
-router.post('/portfolio/:id', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/portfolio/:id', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const item = findPortfolioItem(content, req.params.id);
   if (!item) return renderPageError(req, res, 'portfolio', 'Объект не найден');
 
@@ -818,32 +894,29 @@ router.post('/portfolio/:id', requireAuth, (req, res) => {
   item.price = (price || '').trim();
   item.address = (address || '').trim();
   item.description = (description || '').trim();
-  saveContent(content);
+  await saveContent(content);
   portfolioRedirect(res, item.id);
-});
+}));
 
 // Догрузка фотографий к объекту (можно выбрать сразу несколько).
-router.post('/portfolio/:id/photos', requireAuth, (req, res) => {
-  upload.array('photos', 30)(req, res, (err) => {
-    if (err) return renderPageError(req, res, 'portfolio', err.message);
+router.post('/portfolio/:id/photos', requireAuth, withUpload(upload.array('photos', 30), async (req, res, err) => {
+  if (err) return renderPageError(req, res, 'portfolio', err.message);
 
-    const uploaded = (req.files || []).map((f) => `/uploads/${f.filename}`);
-    const content = getContent();
-    const item = findPortfolioItem(content, req.params.id);
-    if (!item) {
-      uploaded.forEach(deleteUploadedImage);
-      return renderPageError(req, res, 'portfolio', 'Объект не найден');
-    }
-    if (uploaded.length === 0) {
-      return renderPageError(req, res, 'portfolio', 'Выберите хотя бы одну фотографию');
-    }
+  const uploaded = (req.files || []).map((f) => `/uploads/${f.filename}`);
+  const content = await getContent();
+  const item = findPortfolioItem(content, req.params.id);
+  if (!item) {
+    return renderPageError(req, res, 'portfolio', 'Объект не найден');
+  }
+  if (uploaded.length === 0) {
+    return renderPageError(req, res, 'portfolio', 'Выберите хотя бы одну фотографию');
+  }
 
-    if (!Array.isArray(item.photos)) item.photos = [];
-    item.photos.push(...uploaded);
-    saveContent(content);
-    portfolioRedirect(res, item.id);
-  });
-});
+  if (!Array.isArray(item.photos)) item.photos = [];
+  item.photos.push(...uploaded);
+  await saveContent(content);
+  portfolioRedirect(res, item.id);
+}));
 
 function getPhotoIndex(item, rawIndex) {
   const index = Number(rawIndex);
@@ -852,41 +925,41 @@ function getPhotoIndex(item, rawIndex) {
 }
 
 // Сделать фото обложкой — переносим его в начало списка.
-router.post('/portfolio/:id/photos/:index/cover', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/portfolio/:id/photos/:index/cover', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const item = findPortfolioItem(content, req.params.id);
   const index = getPhotoIndex(item, req.params.index);
   if (index === -1) return renderPageError(req, res, 'portfolio', 'Фотография не найдена');
 
   const [photo] = item.photos.splice(index, 1);
   item.photos.unshift(photo);
-  saveContent(content);
+  await saveContent(content);
   portfolioRedirect(res, item.id);
-});
+}));
 
-router.post('/portfolio/:id/photos/:index/delete', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/portfolio/:id/photos/:index/delete', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const item = findPortfolioItem(content, req.params.id);
   const index = getPhotoIndex(item, req.params.index);
   if (index === -1) return renderPageError(req, res, 'portfolio', 'Фотография не найдена');
 
   const [removed] = item.photos.splice(index, 1);
+  await saveContent(content);
   deleteUploadedImage(removed);
-  saveContent(content);
   portfolioRedirect(res, item.id);
-});
+}));
 
-router.post('/portfolio/:id/delete', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/portfolio/:id/delete', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const list = content.portfolio || [];
   const index = list.findIndex((p) => String(p.id) === req.params.id);
   if (index === -1) return renderPageError(req, res, 'portfolio', 'Объект не найден');
 
   const [removed] = list.splice(index, 1);
+  await saveContent(content);
   (removed.photos || []).forEach(deleteUploadedImage);
-  saveContent(content);
   portfolioRedirect(res);
-});
+}));
 
 // ---- Этапы стройки (вертикальная лента этапов, у каждого — свои фото) ----
 // Порядок этапов на сайте = порядок в массиве content.stages.
@@ -900,21 +973,21 @@ function stagesRedirect(res, id) {
   res.redirect(`/admin/stages?saved=1${open}`);
 }
 
-router.post('/stages', requireAuth, (req, res) => {
+router.post('/stages', requireAuth, asyncRoute(async (req, res) => {
   const title = (req.body.title || '').trim();
   if (!title) return renderPageError(req, res, 'stages', 'Укажите название этапа');
 
-  const content = getContent();
+  const content = await getContent();
   if (!Array.isArray(content.stages)) content.stages = [];
   const id = Math.max(nextHouseId(content.stages), content.nextStageId || 0);
   const stage = { id, title, description: '', photos: [] };
   content.stages.push(stage);
-  saveContent(content);
+  await saveContent(content);
   stagesRedirect(res, stage.id);
-});
+}));
 
-router.post('/stages/:id', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/stages/:id', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const stage = findStage(content, req.params.id);
   if (!stage) return renderPageError(req, res, 'stages', 'Этап не найден');
 
@@ -923,13 +996,13 @@ router.post('/stages/:id', requireAuth, (req, res) => {
   if (title !== stage.title) updateHouseInclusionStage(content.houses, content.stages, stage, String(stage.id), title);
   stage.title = title;
   stage.description = (req.body.description || '').trim();
-  saveContent(content);
+  await saveContent(content);
   stagesRedirect(res, stage.id);
-});
+}));
 
 // Перемещение этапа на одну позицию вверх/вниз по ленте.
-router.post('/stages/:id/move', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/stages/:id/move', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const list = content.stages || [];
   const index = list.findIndex((s) => String(s.id) === req.params.id);
   if (index === -1) return renderPageError(req, res, 'stages', 'Этап не найден');
@@ -937,47 +1010,44 @@ router.post('/stages/:id/move', requireAuth, (req, res) => {
   const target = req.body.direction === 'up' ? index - 1 : index + 1;
   if (target >= 0 && target < list.length) {
     [list[index], list[target]] = [list[target], list[index]];
-    saveContent(content);
+    await saveContent(content);
   }
   stagesRedirect(res, req.params.id);
-});
+}));
 
-router.post('/stages/:id/photos', requireAuth, (req, res) => {
-  upload.array('photos', 30)(req, res, (err) => {
-    if (err) return renderPageError(req, res, 'stages', err.message);
+router.post('/stages/:id/photos', requireAuth, withUpload(upload.array('photos', 30), async (req, res, err) => {
+  if (err) return renderPageError(req, res, 'stages', err.message);
 
-    const uploaded = (req.files || []).map((f) => `/uploads/${f.filename}`);
-    const content = getContent();
-    const stage = findStage(content, req.params.id);
-    if (!stage) {
-      uploaded.forEach(deleteUploadedImage);
-      return renderPageError(req, res, 'stages', 'Этап не найден');
-    }
-    if (uploaded.length === 0) {
-      return renderPageError(req, res, 'stages', 'Выберите хотя бы одну фотографию');
-    }
+  const uploaded = (req.files || []).map((f) => `/uploads/${f.filename}`);
+  const content = await getContent();
+  const stage = findStage(content, req.params.id);
+  if (!stage) {
+    return renderPageError(req, res, 'stages', 'Этап не найден');
+  }
+  if (uploaded.length === 0) {
+    return renderPageError(req, res, 'stages', 'Выберите хотя бы одну фотографию');
+  }
 
-    if (!Array.isArray(stage.photos)) stage.photos = [];
-    stage.photos.push(...uploaded);
-    saveContent(content);
-    stagesRedirect(res, stage.id);
-  });
-});
+  if (!Array.isArray(stage.photos)) stage.photos = [];
+  stage.photos.push(...uploaded);
+  await saveContent(content);
+  stagesRedirect(res, stage.id);
+}));
 
-router.post('/stages/:id/photos/:index/delete', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/stages/:id/photos/:index/delete', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const stage = findStage(content, req.params.id);
   const index = getPhotoIndex(stage, req.params.index);
   if (index === -1) return renderPageError(req, res, 'stages', 'Фотография не найдена');
 
   const [removed] = stage.photos.splice(index, 1);
+  await saveContent(content);
   deleteUploadedImage(removed);
-  saveContent(content);
   stagesRedirect(res, stage.id);
-});
+}));
 
-router.post('/stages/:id/delete', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/stages/:id/delete', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const list = content.stages || [];
   const index = list.findIndex((s) => String(s.id) === req.params.id);
   if (index === -1) return renderPageError(req, res, 'stages', 'Этап не найден');
@@ -987,10 +1057,10 @@ router.post('/stages/:id/delete', requireAuth, (req, res) => {
   content.nextStageId = Math.max(nextHouseId(list), content.nextStageId || 0);
   updateHouseInclusionStage(content.houses, list, stage, null, stage.title);
   const [removed] = list.splice(index, 1);
+  await saveContent(content);
   (removed.photos || []).forEach(deleteUploadedImage);
-  saveContent(content);
   stagesRedirect(res);
-});
+}));
 
 // ---- Подбор проектов: общие настройки, блоки и варианты ----
 
@@ -1019,8 +1089,8 @@ function syncHouseParameters(content) {
   });
 }
 
-router.post('/calculator/settings', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/calculator/settings', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const calc = getCalc(content);
   const { title, intro, note, areaMin, areaMax } = req.body;
   const min = Number(areaMin);
@@ -1033,15 +1103,15 @@ router.post('/calculator/settings', requireAuth, (req, res) => {
   calc.intro = (intro || '').trim();
   calc.note = (note || '').trim();
   calc.area = { min, max };
-  saveContent(content);
+  await saveContent(content);
   res.redirect('/admin/calculator?saved=1');
-});
+}));
 
-router.post('/calculator/blocks', requireAuth, (req, res) => {
+router.post('/calculator/blocks', requireAuth, asyncRoute(async (req, res) => {
   const title = (req.body.title || '').trim();
   if (!title) return renderPageError(req, res, 'calculatorDirectory', 'Укажите название блока');
 
-  const content = getContent();
+  const content = await getContent();
   const calc = getCalc(content);
   const block = {
     id: calc.blocks.reduce((m, b) => Math.max(m, Number(b.id) || 0), 0) + 1,
@@ -1050,104 +1120,100 @@ router.post('/calculator/blocks', requireAuth, (req, res) => {
     options: [],
   };
   calc.blocks.push(block);
-  saveContent(content);
+  await saveContent(content);
   redirectToCalculatorDirectory(res, block.id);
-});
+}));
 
 // Сохранение блока целиком: название, тип выбора и все варианты в нём
 // (с иконками). Новый вариант добавляется, если заполнено его название.
-router.post('/calculator/blocks/:id', requireAuth, (req, res) => {
-  upload.any()(req, res, (err) => {
-    const uploadedFiles = (req.files || []).map((f) => ({ field: f.fieldname, path: `/uploads/${f.filename}` }));
-    const dropUploads = () => uploadedFiles.forEach((f) => deleteUploadedImage(f.path));
-    if (err) {
-      dropUploads();
-      return renderPageError(req, res, 'calculatorDirectory', err.message);
+router.post('/calculator/blocks/:id', requireAuth, withUpload(upload.any(), async (req, res, err) => {
+  const uploadedFiles = (req.files || []).map((f) => ({ field: f.fieldname, path: `/uploads/${f.filename}` }));
+  if (err) {
+    return renderPageError(req, res, 'calculatorDirectory', err.message);
+  }
+
+  const content = await getContent();
+  const calc = getCalc(content);
+  const block = calc.blocks.find((b) => String(b.id) === req.params.id);
+  if (!block) {
+    return renderPageError(req, res, 'calculatorDirectory', 'Блок не найден');
+  }
+
+  const title = (req.body.title || '').trim();
+  if (!title) {
+    return renderPageError(req, res, 'calculatorDirectory', 'Название блока не может быть пустым');
+  }
+
+  const fileFor = (field) => {
+    const f = uploadedFiles.find((u) => u.field === field);
+    if (f) f.used = true;
+    return f ? f.path : null;
+  };
+
+  const previousImages = [];
+  function applyIcon(option, iconChoice, uploaded) {
+    if (uploaded) {
+      previousImages.push(option.image);
+      option.image = uploaded;
+      return;
     }
-
-    const content = getContent();
-    const calc = getCalc(content);
-    const block = calc.blocks.find((b) => String(b.id) === req.params.id);
-    if (!block) {
-      dropUploads();
-      return renderPageError(req, res, 'calculatorDirectory', 'Блок не найден');
+    if (iconChoice && iconChoice !== '__custom') {
+      previousImages.push(option.image);
+      option.image = '';
+      option.icon = ICONS[iconChoice] ? iconChoice : DEFAULT_ICON;
     }
+  }
 
-    const title = (req.body.title || '').trim();
-    if (!title) {
-      dropUploads();
-      return renderPageError(req, res, 'calculatorDirectory', 'Название блока не может быть пустым');
+  const rows = Array.isArray(req.body.options) ? req.body.options : Object.values(req.body.options || {});
+  const kept = [];
+  rows.forEach((row, i) => {
+    if (!row) return;
+    const option = (block.options || []).find((o) => String(o.id) === String(row.id));
+    if (!option) return;
+    if (row.remove === '1') {
+      previousImages.push(option.image);
+      return;
     }
-
-    const fileFor = (field) => {
-      const f = uploadedFiles.find((u) => u.field === field);
-      if (f) f.used = true;
-      return f ? f.path : null;
-    };
-
-    function applyIcon(option, iconChoice, uploaded) {
-      if (uploaded) {
-        deleteUploadedImage(option.image);
-        option.image = uploaded;
-        return;
-      }
-      if (iconChoice && iconChoice !== '__custom') {
-        if (option.image) deleteUploadedImage(option.image);
-        option.image = '';
-        option.icon = ICONS[iconChoice] ? iconChoice : DEFAULT_ICON;
-      }
-    }
-
-    const rows = Array.isArray(req.body.options) ? req.body.options : Object.values(req.body.options || {});
-    const kept = [];
-    rows.forEach((row, i) => {
-      if (!row) return;
-      const option = (block.options || []).find((o) => String(o.id) === String(row.id));
-      if (!option) return;
-      if (row.remove === '1') {
-        deleteUploadedImage(option.image);
-        return;
-      }
-      option.title = (row.title || '').trim() || option.title;
-      option.hint = (row.hint || '').trim();
-      delete option.price;
-      delete option.unit;
-      applyIcon(option, row.icon, fileFor(`icon_${i}`));
-      kept.push(option);
-    });
-    // Варианты, которых почему-то не было в форме, не теряем.
-    (block.options || []).forEach((o) => {
-      const inForm = rows.some((r) => r && String(r.id) === String(o.id));
-      if (!inForm) kept.push(o);
-    });
-
-    const fresh = req.body.newOption || {};
-    const freshTitle = (fresh.title || '').trim();
-    if (freshTitle) {
-      const option = {
-        id: nextOptionId(calc),
-        title: freshTitle,
-        hint: (fresh.hint || '').trim(),
-        icon: ICONS[fresh.icon] ? fresh.icon : DEFAULT_ICON,
-        image: '',
-      };
-      applyIcon(option, null, fileFor('icon_new'));
-      kept.push(option);
-    }
-
-    block.title = title;
-    block.multiple = req.body.multiple === '1';
-    block.options = kept;
-    syncHouseParameters(content);
-
-    uploadedFiles.filter((f) => !f.used).forEach((f) => deleteUploadedImage(f.path));
-    saveContent(content);
-    redirectToCalculatorDirectory(res, block.id);
+    option.title = (row.title || '').trim() || option.title;
+    option.hint = (row.hint || '').trim();
+    delete option.price;
+    delete option.unit;
+    applyIcon(option, row.icon, fileFor(`icon_${i}`));
+    kept.push(option);
   });
-});
+  // Варианты, которых почему-то не было в форме, не теряем.
+  (block.options || []).forEach((o) => {
+    const inForm = rows.some((r) => r && String(r.id) === String(o.id));
+    if (!inForm) kept.push(o);
+  });
 
-router.post('/calculator/blocks/:id/move', requireAuth, (req, res) => {
-  const content = getContent();
+  const fresh = req.body.newOption || {};
+  const freshTitle = (fresh.title || '').trim();
+  if (freshTitle) {
+    const option = {
+      id: nextOptionId(calc),
+      title: freshTitle,
+      hint: (fresh.hint || '').trim(),
+      icon: ICONS[fresh.icon] ? fresh.icon : DEFAULT_ICON,
+      image: '',
+    };
+    applyIcon(option, null, fileFor('icon_new'));
+    kept.push(option);
+  }
+
+  block.title = title;
+  block.multiple = req.body.multiple === '1';
+  block.options = kept;
+  syncHouseParameters(content);
+
+  await saveContent(content);
+  previousImages.forEach(deleteUploadedImage);
+  uploadedFiles.filter((f) => !f.used).forEach((f) => deleteUploadedImage(f.path));
+  redirectToCalculatorDirectory(res, block.id);
+}));
+
+router.post('/calculator/blocks/:id/move', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const list = getCalc(content).blocks;
   const index = list.findIndex((b) => String(b.id) === req.params.id);
   if (index === -1) return renderPageError(req, res, 'calculatorDirectory', 'Блок не найден');
@@ -1155,26 +1221,26 @@ router.post('/calculator/blocks/:id/move', requireAuth, (req, res) => {
   const target = req.body.direction === 'up' ? index - 1 : index + 1;
   if (target >= 0 && target < list.length) {
     [list[index], list[target]] = [list[target], list[index]];
-    saveContent(content);
+    await saveContent(content);
   }
   redirectToCalculatorDirectory(res, req.params.id);
-});
+}));
 
-router.post('/calculator/blocks/:id/delete', requireAuth, (req, res) => {
-  const content = getContent();
+router.post('/calculator/blocks/:id/delete', requireAuth, asyncRoute(async (req, res) => {
+  const content = await getContent();
   const list = getCalc(content).blocks;
   const index = list.findIndex((b) => String(b.id) === req.params.id);
   if (index === -1) return renderPageError(req, res, 'calculatorDirectory', 'Блок не найден');
 
   const [removed] = list.splice(index, 1);
-  (removed.options || []).forEach((o) => deleteUploadedImage(o.image));
   syncHouseParameters(content);
-  saveContent(content);
+  await saveContent(content);
+  (removed.options || []).forEach((o) => deleteUploadedImage(o.image));
   redirectToCalculatorDirectory(res);
-});
+}));
 
 function renderPageError(req, res, page, message) {
-  renderContentPage(req, res, page, { error: message, status: 400 });
+  return renderContentPage(req, res, page, { error: message, status: 400 });
 }
 
 module.exports = router;

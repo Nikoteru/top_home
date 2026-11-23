@@ -8,6 +8,7 @@ const crypto = require('crypto');
 
 const publicRoutes = require('./src/routes/public');
 const adminRoutes = require('./src/routes/admin');
+const database = require('./src/data/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -62,11 +63,20 @@ app.use((req, res) => {
 // Общий обработчик ошибок — не отдаём стек вызовов и внутренние детали
 // клиенту (даже если кто-то забудет NODE_ENV=production на проде).
 app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err.status === 409) return res.status(409).send(err.message);
   console.error(err);
   res.status(500).send('Что-то пошло не так. Попробуйте ещё раз позже.');
 });
 
-app.listen(PORT, () => {
-  console.log(`Сайт запущен: http://localhost:${PORT}`);
-  console.log(`Админка:      http://localhost:${PORT}/admin`);
+database.assertReady().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Сайт запущен: http://localhost:${PORT}`);
+    console.log(`Админка:      http://localhost:${PORT}/admin`);
+    console.log(database.enabled ? 'Хранилище: PostgreSQL' : 'Хранилище: JSON');
+  });
+}).catch(async (error) => {
+  console.error('Не удалось запустить сайт.', error.code ? `Ошибка PostgreSQL ${error.code}.` : error.message);
+  process.exitCode = 1;
+  await database.close();
 });

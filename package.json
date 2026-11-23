@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "db:migrate": "node scripts/migrate-db.js",
     "test": "node --test"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
     "jszip": "^3.10.1",
     "multer": "^2.0.1",
     "pdfkit": "^0.17.2",
+    "pg": "^8.23.1",
     "sharp": "^0.34.5"
   },
   "overrides": {

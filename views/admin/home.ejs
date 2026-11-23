@@ -1,4 +1,15 @@
 <!doctype html>
+<%
+  const { hero, headings: homeHeadings, projects, stages, portfolio, advantages, design } = homepage;
+  const collections = [
+    { title: homeHeadings.projects, path: '/admin/houses', link: 'Настроить проекты',
+      cards: projects.map((house) => ({ title: house.title, image: projectMedia(house).cover })) },
+    { title: homeHeadings.stages, path: '/admin/stages', link: 'Настроить этапы',
+      cards: stages.map((stage) => ({ title: stage.title, image: stage.cover?.src })) },
+    { title: homeHeadings.portfolio, path: '/admin/portfolio', link: 'Настроить портфолио',
+      cards: portfolio.map((item) => ({ title: item.title, image: portfolioMedia(item).cover })) },
+  ];
+%>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
@@ -17,16 +28,18 @@
       <div class="alert alert-error"><%= error %></div>
     <% } %>
 
+    <%- include('../partials/admin-public-preview', { publicPath: '/', pageTitle: 'Главная страница' }) %>
+
     <section class="admin-card">
-      <h2>Hero-баннер (главный экран сайта)</h2>
+      <h2>Баннер на главной</h2>
       <div class="admin-card__row">
-        <img class="admin-preview" src="<%= content.hero.image %>" alt="Hero">
+        <img class="admin-preview" src="<%= hero.image %>" alt="Баннер на главной">
         <form method="POST" action="/admin/hero" enctype="multipart/form-data" class="admin-upload-form">
           <label>Заголовок
-            <input type="text" name="title" value="<%= content.hero.title %>" required>
+            <input type="text" name="title" value="<%= hero.title %>" required>
           </label>
           <label>Подзаголовок
-            <textarea name="subtitle" rows="2"><%= content.hero.subtitle %></textarea>
+            <textarea name="subtitle" rows="2"><%= hero.subtitle %></textarea>
           </label>
           <label>Заменить изображение
             <input type="file" name="image" accept="image/*">
@@ -47,6 +60,15 @@
         <label>Проекты на главной
           <input type="text" name="projects" value="<%= homeHeadings.projects %>" required>
         </label>
+        <label>Этапы стройки
+          <input type="text" name="stages" value="<%= homeHeadings.stages %>" required>
+        </label>
+        <label>Индивидуальное проектирование
+          <input type="text" name="design" value="<%= homeHeadings.design %>" required>
+        </label>
+        <label>Портфолио
+          <input type="text" name="portfolio" value="<%= homeHeadings.portfolio %>" required>
+        </label>
         <label>Форма заявки
           <input type="text" name="request" value="<%= homeHeadings.request %>" required>
         </label>
@@ -56,12 +78,54 @@
       </form>
     </section>
 
+    <section class="admin-card">
+      <h2>Карточки на главной</h2>
+      <% collections.forEach(({ title, path, link, cards }) => { %>
+        <div class="admin-home-collection">
+          <div class="admin-home-collection__header">
+            <h3><%= title %></h3>
+            <a class="btn btn-outline btn-small" href="<%= path %>"><%= link %></a>
+          </div>
+          <% if (cards.length) { %>
+            <ul class="admin-gallery-grid admin-home-collection__cards">
+              <% cards.forEach((card) => { %>
+                <li class="admin-gallery-item">
+                  <% if (card.image) { %><img src="<%= card.image %>" alt="" loading="lazy"><% } %>
+                  <span><%= card.title %></span>
+                </li>
+              <% }); %>
+            </ul>
+          <% } else { %>
+            <p class="admin-empty">На главной пока нет карточек этого раздела.</p>
+          <% } %>
+        </div>
+      <% }); %>
+    </section>
+
+    <section class="admin-card">
+      <h2><%= homeHeadings.design %></h2>
+      <div class="admin-card__row">
+        <img class="admin-preview" src="<%= design.image %>" alt="" loading="lazy">
+        <form method="POST" action="/admin/home/design" enctype="multipart/form-data" class="admin-upload-form">
+          <label>Описание
+            <textarea name="text" rows="3"><%= design.text %></textarea>
+          </label>
+          <label>Заменить изображение
+            <input type="file" name="image" accept="image/*">
+          </label>
+          <div class="admin-form-actions">
+            <button type="submit" class="btn btn-accent btn-small">Сохранить</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
     <h2 class="admin-section-title">Карточки преимуществ</h2>
     <div class="admin-houses-grid">
-      <% content.advantages.forEach(function(adv) { %>
+      <% advantages.forEach(function(adv) { %>
         <section class="admin-card">
           <div class="admin-card__row">
-            <img class="admin-preview admin-preview--house" src="<%= adv.image %>" alt="<%= adv.title %>">
+            <% if (adv.image) { %><img class="admin-preview admin-preview--house" src="<%= adv.image %>" alt="" loading="lazy"><% } %>
             <form method="POST" action="/admin/advantage/<%= adv.id %>" enctype="multipart/form-data" class="admin-upload-form">
               <label>Заголовок
                 <input type="text" name="title" value="<%= adv.title %>" required>

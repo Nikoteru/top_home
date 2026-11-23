@@ -67,7 +67,11 @@
             <% } %>
           </section>
           <div class="admin-card__row">
-            <img class="admin-preview admin-preview--house" src="<%= house.image %>" alt="<%= house.title %>">
+            <% const media = projectMedia(house); %>
+            <div>
+              <img class="admin-preview admin-preview--house" src="<%= media.cover %>" alt="<%= house.title %>">
+              <p class="field-hint">Обложка на сайте<%= media.illustrated ? ' · Визуализация' : '' %></p>
+            </div>
             <form method="POST" action="/admin/house/<%= house.id %>" enctype="multipart/form-data" class="admin-upload-form">
               <label>Название
                 <input type="text" name="title" value="<%= house.title %>" required>

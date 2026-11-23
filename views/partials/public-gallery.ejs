@@ -1,27 +1,39 @@
 <% if (media.photos.length) { %>
-  <div class="house-detail-gallery">
-    <button type="button" class="gallery-main" id="galleryMain" aria-label="Открыть <%= media.illustrated ? 'визуализацию' : 'фото' %> на весь экран">
-      <img src="<%= media.photos[0] %>" alt="" fetchpriority="high">
-      <% if (media.illustrated) { %><span class="media-caption">Архитектурная визуализация</span><% } %>
-      <span class="gallery-zoom-hint">Увеличить <span aria-hidden="true">⤢</span></span>
-    </button>
+  <% const isFeatured = typeof featured !== 'undefined' && featured;
+     const captions = media.photos.map((photo, index) => {
+       if (media.illustrated && index === 0) return 'Архитектурная визуализация';
+       return media.examplePhotos?.includes(photo) ? 'Пример изображения' : '';
+     }); %>
+  <section class="house-detail-gallery<%= isFeatured ? ' project-gallery' : '' %>" aria-label="Галерея изображений">
+    <div class="gallery-stage">
+      <button type="button" class="gallery-main" id="galleryMain" aria-label="Увеличить изображение<%= captions[0] ? ' — ' + captions[0] : '' %>">
+        <img src="<%= media.photos[0] %>" alt="" fetchpriority="high">
+        <span class="media-caption" data-gallery-caption<%= captions[0] ? '' : ' hidden' %>><%= captions[0] %></span>
+        <span class="gallery-zoom-hint">Увеличить <span aria-hidden="true">⤢</span></span>
+      </button>
+      <% if (isFeatured && media.photos.length > 1) { %>
+        <button type="button" class="gallery-step gallery-step--prev" data-gallery-step="-1" aria-controls="galleryMain" aria-label="Предыдущее изображение"><span aria-hidden="true">←</span></button>
+        <button type="button" class="gallery-step gallery-step--next" data-gallery-step="1" aria-controls="galleryMain" aria-label="Следующее изображение"><span aria-hidden="true">→</span></button>
+        <span class="gallery-position" data-gallery-position aria-live="polite" aria-atomic="true">1 / <%= media.photos.length %></span>
+      <% } %>
+    </div>
     <% if (media.photos.length > 1) { %>
-      <div class="gallery-thumbs" aria-label="Фотографии">
+      <div class="gallery-thumbs<%= isFeatured ? ' container' : '' %>" role="group" aria-label="Миниатюры">
         <% media.photos.forEach(function(photo, index) { %>
-          <button type="button" class="gallery-thumb <%= index === 0 ? 'is-active' : '' %>" aria-label="Фото <%= index + 1 %>" aria-pressed="<%= index === 0 %>">
+          <button type="button" class="gallery-thumb <%= index === 0 ? 'is-active' : '' %>" aria-label="Изображение <%= index + 1 %><%= captions[index] ? ' — ' + captions[index] : '' %>" aria-pressed="<%= index === 0 %>" aria-controls="galleryMain" data-caption="<%= captions[index] %>">
             <img src="<%= photo %>" alt="" loading="lazy">
           </button>
         <% }); %>
       </div>
     <% } %>
-  </div>
+  </section>
 
-  <div class="lightbox" id="lightbox" hidden>
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Просмотр галереи" hidden>
     <button type="button" class="lightbox-close" id="lightboxClose" aria-label="Закрыть">✕</button>
     <button type="button" class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Предыдущее фото">‹</button>
     <img class="lightbox-image" id="lightboxImage" alt="">
     <button type="button" class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Следующее фото">›</button>
-    <div class="lightbox-counter" id="lightboxCounter"></div>
+    <div class="lightbox-counter" id="lightboxCounter" aria-live="polite" aria-atomic="true"></div>
   </div>
 
   <script>

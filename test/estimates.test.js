@@ -8,6 +8,9 @@ const express = require('express');
 const ExcelJS = require('exceljs');
 const store = require('../src/data/estimatesStore');
 const contentStore = require('../src/data/store');
+const { buildEstimateWorkbook } = require('../src/utils/estimateWorkbook');
+const { referenceProfitSections } = require('../src/utils/estimateReferenceProfitFormulas');
+const { getWorksheetRows } = require('../public/js/estimate-formulas');
 const { itemTotal, formatTotal } = require('../public/js/estimate-totals');
 
 test('estimate rows round to kopecks and accept decimal commas', () => {
@@ -18,12 +21,190 @@ test('estimate rows round to kopecks and accept decimal commas', () => {
   assert.equal(formatTotal(-5n), '−0,05 ₽');
 });
 
+test('a configured estimate exports the reference payment and construction appendices with live data', async () => {
+  const fixture = [
+    ['Фундамент', [60000.05], [80000]],
+    ['Стены', [1000, 90000], [70000]],
+    ['Кровля', [100000], [120000]],
+    ['Окна двери', [75000], [80000]],
+    ['Отделка', [125000], [180000]],
+    ['Сантехника, электрика, финишные работы.', [90000], [10000, 20000, 30000, 40000, 50000, 60000, 70000]],
+    ['Доставка разгрузка', [11000], [12000]],
+  ];
+  const template = {
+    title: 'Шаблон',
+    stages: fixture.map(([title, materials, works]) => ({
+      title,
+      groups: [materials, works].map((prices, index) => ({
+        type: index === 0 ? 'material' : 'work',
+        items: prices.map((_, itemIndex) => ({
+          title: `Позиция ${itemIndex + 1}`,
+          unit: 'шт.',
+          baseCells: ['price', 'quantity', 'amount'],
+        })),
+      })),
+    })),
+  };
+  const entries = Object.fromEntries(Array.from(getWorksheetRows(template), ([row, position]) => {
+    const { stageIndex, groupIndex, itemIndex } = position;
+    const price = fixture[stageIndex][groupIndex + 1][itemIndex];
+    return [row, { price: String(price), quantity: '2', amount: String(price * 2) }];
+  }));
+  // A manual estimate amount must not replace the price × quantity used by the reference formulas.
+  entries[4] = { ...entries[4], quantity: '2.5', amount: '0.01' };
+  const referencePaymentSchedule = {
+    contractLabel: '№ Тест-3',
+    contractDate: 45922,
+    payments: Array.from({ length: 9 }, (_, index) => ({
+      description: `Описание платежа ${index + 1}`,
+      amountInWords: `Сумма платежа ${index + 1} прописью`,
+    })),
+    totalInWords: 'Сумма договора прописью',
+  };
+  const referenceConstructionSchedule = {
+    stages: [0, 1, 2, 3, 4, 6, 5].map((index) => ({
+      name: index === 2 ? 'Кровля ' : fixture[index][0],
+      amountInWords: `Стоимость этапа ${index + 1} прописью`,
+      notes: `Примечание к этапу ${index + 1}`,
+    })),
+    totalInWords: 'Итого по графику прописью',
+  };
+  const exported = buildEstimateWorkbook({
+    title: 'Расчёт', template, entries, referencePaymentSchedule, referenceConstructionSchedule,
+  }, {
+    includeAppendices: true,
+  });
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await exported.xlsx.writeBuffer());
+  const sheet = workbook.getWorksheet('Приложение№3');
+  assert.equal(workbook.getWorksheet('Смета').getCell('F6').value, 0.01);
+  assert.equal(sheet.pageSetup.printArea, 'A1:F16');
+  assert.equal(sheet.rowCount, 16);
+  assert.equal(sheet.columnCount, 6);
+  assert.equal(sheet.getCell('D1').master.address, 'A1');
+  assert.equal(sheet.getCell('E1').value, referencePaymentSchedule.contractLabel);
+  assert.deepEqual(sheet.getCell('F1').value, new Date('2025-09-22T00:00:00Z'));
+  assert.equal(sheet.getCell('B2').fill.fgColor.argb, 'FF83A658');
+  assert.equal(sheet.getCell('F4').master.address, 'D4');
+  assert.equal(sheet.getCell('B4').value, referencePaymentSchedule.payments[0].description);
+  assert.equal(sheet.getCell('D12').value, referencePaymentSchedule.payments[8].amountInWords);
+  assert.match(sheet.getCell('C4').formula, /'Смета'!\$?D\$?14\*10\+200000/);
+  assert.match(sheet.getCell('C5').formula, /SUMPRODUCT\('Смета'!D6:D6,'Смета'!E6:E6\)/);
+  assert.match(sheet.getCell('C6').formula, /-C7$/);
+  assert.deepEqual([4, 5, 6, 7, 8, 9, 10, 11, 12].map((row) => sheet.getCell(`C${row}`).result),
+    [210000, 310000.125, 468000, 30000, 290000, 603000, 540000, 180000, 500340]);
+  assert.equal(sheet.getCell('B13').formula, 'SUM(C4:C12)');
+  assert.equal(sheet.getCell('B13').result, 3131340.125);
+  assert.equal(sheet.getCell('F13').master.address, 'C13');
+  assert.equal(sheet.getCell('C13').value, referencePaymentSchedule.totalInWords);
+  assert.equal(sheet.getCell('F16').master.address, 'A16');
+
+  const schedule = workbook.getWorksheet('Приложение№4');
+  assert.equal(schedule.pageSetup.printArea, 'A1:G13');
+  assert.equal(schedule.rowCount, 13);
+  assert.equal(schedule.columnCount, 7);
+  const mergedCells = ['E1', 'F2', 'F3', 'F9', 'C10', 'G10', 'G11', 'G13'];
+  assert.deepEqual(mergedCells.map((address) => schedule.getCell(address).master.address),
+    ['A1', 'D2', 'E3', 'E9', 'A10', 'E10', 'A11', 'A13']);
+  for (const [address, source] of [['F1', 'E1'], ['G1', 'F1'], ['E3', 'D5'], ['E10', 'C13']]) {
+    assert.equal(schedule.getCell(address).formula.replaceAll('$', ''), `'Приложение№3'!${source}`);
+    assert.deepEqual(schedule.getCell(address).result, sheet.getCell(source).value);
+  }
+  const stageRows = [3, 4, 5, 6, 7, 8, 9].map((number) => schedule.getRow(number));
+  assert.deepEqual(stageRows.map((row) => row.getCell('B').result),
+    referenceConstructionSchedule.stages.map(({ name }) => name));
+  assert.deepEqual(stageRows.map((row) => row.getCell('C').formula),
+    ['G1+7', 'G1+45', 'G1+60', 'C5+15', 'C6+30', 'C7', 'C7+30']);
+  assert.deepEqual(stageRows.map((row) => row.getCell('C').result.toISOString().slice(0, 10)),
+    ['2025-09-29', '2025-11-06', '2025-11-21', '2025-12-06', '2026-01-05', '2026-01-05', '2026-02-04']);
+  for (const row of stageRows) {
+    assert.match(row.getCell('B').formula, /'Смета'!/);
+    assert.match(row.getCell('D').formula, /SUMPRODUCT\('Смета'!/);
+  }
+  assert.deepEqual(stageRows.map((row) => row.getCell('D').result),
+    [310000.125, 322000, 440000, 310000, 610000, 46000, 740000]);
+  assert.equal(schedule.getCell('D10').formula, 'SUM(D3:D9)');
+  assert.equal(schedule.getCell('D10').result, 2778000.125);
+  assert.equal(schedule.getCell('E4').value, referenceConstructionSchedule.stages[1].amountInWords);
+  assert.equal(schedule.getCell('G9').value, referenceConstructionSchedule.stages[6].notes);
+});
+
+test('a configured estimate exports the reference profit sheet without rounding source cost', async () => {
+  const stageTitles = [
+    'Фундамент', 'Стены', 'Кровля', 'Окна двери', 'Отделка',
+    'Сантехника, электрика, финишные работы.', 'Доставка разгрузка',
+  ];
+  const referenceProfit = { stageLabels: {}, positions: {} };
+  const template = {
+    title: 'Шаблон',
+    stages: referenceProfitSections.map(({ groups }, stageIndex) => {
+      const title = stageTitles[stageIndex];
+      referenceProfit.stageLabels[groups[0].firstRow] = stageIndex === 2 ? 'Кровля ' : title;
+      return {
+        title,
+        groups: groups.map(({ type, firstRow, lastRow }) => ({
+          type,
+          items: Array.from({ length: lastRow - firstRow + 1 }, (_, index) => {
+            const row = firstRow + index;
+            const name = `Позиция ${row} `;
+            referenceProfit.positions[row] = { name, unit: 'м3' };
+            return { title: name.trim(), unit: 'м³', baseCells: ['price', 'quantity', 'amount'] };
+          }),
+        })),
+      };
+    }),
+  };
+  const entries = Object.fromEntries(Array.from(getWorksheetRows(template).keys(), (row) => [
+    row, { price: '10', quantity: '1' },
+  ]));
+  assert.equal(Object.keys(entries).length, 104);
+  entries[4] = { price: '12.35', quantity: '2.555', amount: '0.01' };
+  const referencePaymentSchedule = {
+    contractLabel: '№ Тест-4 от',
+    contractDate: 45922,
+    payments: Array.from({ length: 9 }, () => ({ description: 'Платёж', amountInWords: '' })),
+    totalInWords: '',
+  };
+  const exported = buildEstimateWorkbook({
+    title: 'Расчёт', template, entries, referenceProfit, referencePaymentSchedule,
+  }, { includeAppendices: true });
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await exported.xlsx.writeBuffer());
+  assert.equal(workbook.getWorksheet('Смета').getCell('F6').value, 0.01);
+
+  const profit = workbook.getWorksheet('Прибыль');
+  assert.equal(profit.pageSetup.printArea, 'A1:G134');
+  assert.equal(profit.rowCount, 134);
+  assert.equal(profit.columnCount, 7);
+  assert.deepEqual(['D1', 'G1', 'G2', 'C7', 'A11', 'A128', 'G134'].map((address) => profit.getCell(address).master.address),
+    ['A1', 'F1', 'C2', 'B7', 'A4', 'A125', 'A134']);
+
+  const displayedValue = (address) => {
+    const cell = profit.getCell(address);
+    return cell.result ?? cell.value;
+  };
+  assert.equal(displayedValue('E1'), referencePaymentSchedule.contractLabel);
+  assert.deepEqual(displayedValue('F1'), new Date('2025-09-22T00:00:00Z'));
+  assert.equal(displayedValue('A26'), 'Кровля ');
+  assert.equal(displayedValue('C4'), referenceProfit.positions[4].name);
+  assert.equal(displayedValue('D4'), referenceProfit.positions[4].unit);
+  assert.match(profit.getCell('E4').formula, /'Смета'!\$?D\$?6\*0\.8/);
+  assert.match(profit.getCell('F4').formula, /'Смета'!\$?E\$?6\b/);
+  assert.equal(profit.getCell('G4').formula, 'E4*F4');
+  assert.equal(profit.getCell('G124').formula, 'SUM(G122:G123)');
+  assert.equal(profit.getCell('G129').formula, 'SUM(G125:G128)');
+  assert.equal(profit.getCell('G131').formula, 'G124+G129');
+  for (const [address, amount] of Object.entries({
+    E4: 9.88, F4: 2.555, G4: 25.2434, G7: 41.2434, G11: 57.2434,
+    G122: 465.2434, G123: 352, G124: 817.2434, G129: 32, G131: 849.2434,
+  })) {
+    assert.ok(Math.abs(profit.getCell(address).result - amount) < 1e-8, `${address} should equal ${amount}`);
+  }
+});
+
 test('superadmin builds templates and admins fill estimates from a fixed template version', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'top-home-estimates-'));
-  const modulePath = path.join(directory, 'estimatesStore.js');
-  fs.copyFileSync(require.resolve('../src/data/estimatesStore'), modulePath);
-  fs.copyFileSync(require.resolve('../src/data/estimateUnits'), path.join(directory, 'estimateUnits.js'));
-  const isolatedStore = require(modulePath);
+  const isolatedStore = store.createFileEstimatesStore(directory);
   t.after(() => fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }));
   t.mock.method(store, 'getEstimates', isolatedStore.getEstimates);
   t.mock.method(store, 'saveEstimate', isolatedStore.saveEstimate);
@@ -43,6 +224,7 @@ test('superadmin builds templates and admins fill estimates from a fixed templat
   const app = express();
   app.set('view engine', 'ejs');
   app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
   app.use((req, res, next) => {
     const role = req.get('x-test-role');
     req.session = { isAdmin: Boolean(role), adminRole: role };
@@ -158,11 +340,13 @@ test('superadmin builds templates and admins fill estimates from a fixed templat
   const list = await (await fetch(base, { headers })).text();
   assert.doesNotMatch(list, /₽/);
   assert.ok(list.includes('/admin/estimates/' + stored.id));
+  assert.match(list, /Скопировать шаблон/);
+  assert.ok(list.includes(`action="/admin/estimates/${stored.id}/copy"`));
 
   const runsUrl = new URL('/admin/estimate-runs', base).href;
   assert.equal((await fetch(runsUrl, { redirect: 'manual' })).headers.get('location'), '/admin/login');
   const runList = await (await fetch(runsUrl, { headers: regularAdmin })).text();
-  assert.match(runList, /href="\/admin\/estimate-runs" class="is-active">Расчёт смет/);
+  assert.match(runList, /href="\/admin\/estimate-runs" aria-current="page">Расчёт смет/);
   assert.ok(runList.includes('/admin/estimate-runs/new?template=' + stored.id));
   const newRunPage = await fetch(runsUrl + '/new?template=' + stored.id, { headers: regularAdmin });
   assert.equal(newRunPage.status, 200);
@@ -222,9 +406,22 @@ test('superadmin builds templates and admins fill estimates from a fixed templat
   const file = await fetch(exportUrl, { headers: regularAdmin });
   assert.equal(file.status, 200);
   assert.match(file.headers.get('content-type'), /^application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
-  assert.match(file.headers.get('content-disposition'), /^attachment;.*\.xlsx/);
+  const disposition = file.headers.get('content-disposition');
+  assert.match(disposition, /^attachment;.*\.xlsx/);
+  const filename = decodeURIComponent(disposition.match(/filename\*=UTF-8''([^;]+)/)[1]);
+  assert.match(filename, /^Смета — Фундамент для клиента — \d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.xlsx$/);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(Buffer.from(await file.arrayBuffer()));
+  const worksheetNames = ['Смета', 'Приложение№3', 'Приложение№4', 'Прибыль'];
+  assert.deepEqual(workbook.worksheets.map((worksheet) => worksheet.name), worksheetNames);
+  for (const [name, headerRow] of [['Смета', 3], ['Приложение№3', 6], ['Приложение№4', 5], ['Прибыль', 6]]) {
+    const worksheet = workbook.getWorksheet(name);
+    const header = worksheet.getRow(headerRow).getCell(2);
+    assert.equal(header.fill.fgColor.argb, 'FF83A658');
+    assert.equal(header.font.name, 'Tahoma');
+    assert.equal(header.border.bottom.color.argb, 'FF000000');
+    assert.equal(worksheet.pageSetup.orientation, 'portrait');
+  }
   const sheet = workbook.getWorksheet('Смета');
   assert.equal(sheet.getCell('A1').value, savedRun.title);
   assert.deepEqual(['B6', 'C6', 'D6', 'E6', 'F6'].map((address) => sheet.getCell(address).value),
@@ -233,7 +430,45 @@ test('superadmin builds templates and admins fill estimates from a fixed templat
   assert.equal(sheet.getCell('F9').value, 117.33);
   assert.equal(sheet.getCell('F11').value, 148.21);
   assert.equal(sheet.lastRow.getCell(1).value, 'Итого по смете');
-  assert.equal(sheet.lastRow.getCell(6).value, 148.21);
+  const grandTotal = sheet.lastRow.getCell(6);
+  assert.equal(grandTotal.value, 148.21);
+  assert.equal(grandTotal.fill.fgColor.argb, 'FF83A658');
+  assert.equal(grandTotal.numFmt, '#,##0.00" ₽"');
+
+  for (const name of worksheetNames.slice(1)) {
+    const formulas = [];
+    workbook.getWorksheet(name).eachRow((row) => {
+      row.eachCell((cell) => { if (cell.formula) formulas.push(cell.formula); });
+    });
+    assert.ok(formulas.length > 0, `${name} contains formulas`);
+    for (const formula of formulas) {
+      assert.doesNotMatch(formula, /#REF!|Приложение№1|\[[^\]]+\.xlsx?\]/);
+      for (const [, target] of formula.matchAll(/'([^']+)'!/g)) {
+        assert.ok(worksheetNames.includes(target), `Unknown worksheet ${target}`);
+      }
+    }
+  }
+  const payments = workbook.getWorksheet('Приложение№3');
+  assert.equal(payments.getCell('B2').value, null);
+  assert.equal(payments.getCell('G2').value, null);
+  assert.equal(payments.getCell('B3').value, 0);
+  assert.match(payments.getCell('G3').formula, /'Смета'!\$?F\$?18\b/);
+  assert.match(payments.getCell('C8').formula, /'Смета'!\$?F\$?11\b/);
+  assert.equal(payments.getCell('E8').result, 148.21);
+
+  const schedule = workbook.getWorksheet('Приложение№4');
+  assert.equal(schedule.getCell('B3').value, null);
+  assert.equal(schedule.getCell('C6').value, null);
+  assert.match(schedule.getCell('G2').formula, /'Приложение№3'!\$?G\$?2\b/);
+  assert.match(schedule.getCell('E6').formula, /D6\+C6-1/);
+  assert.match(schedule.getCell('F6').formula, /'Смета'!\$?F\$?11\b/);
+  assert.equal(schedule.getCell('F6').result, 148.21);
+
+  const profit = workbook.getWorksheet('Прибыль');
+  assert.equal(profit.getCell('B3').value, 0.8);
+  assert.ok(profit.getColumn(6).values.some((value) => /'Смета'!\$?F\$?6\b/.test(value?.formula || '')));
+  assert.equal(profit.lastRow.getCell(7).result, 118.56);
+  assert.equal(profit.lastRow.getCell(8).result, 29.65);
 
   assert.equal((await submit(unitsUrl + '/' + addedUnit.id, { ...unit, label: 'Мешок строительный' })).status, 302);
   const edit = { ...structuredClone(stored), title: 'Новая версия' };
@@ -324,4 +559,46 @@ test('superadmin builds templates and admins fill estimates from a fixed templat
     title: 'Прежний расчёт', revision: 1, entries: { 4: { price: '10', quantity: '3', amount: '40' } },
   }, regularAdmin)).status, 200);
   assert.equal(store.getEstimateRuns().find((run) => run.id === previousRun.id).totalCents, '6000');
+
+  const original = store.getEstimates().find((estimate) => estimate.id === stored.id);
+  const copyUrl = itemUrl + '/copy';
+  const copyTemplate = (url, title, role = 'superadmin') => fetch(url, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: role ? { 'x-test-role': role } : undefined,
+    body: new URLSearchParams({ title }),
+  });
+  const templateCount = store.getEstimates().length;
+  const deniedCopy = await copyTemplate(copyUrl, 'Копия сметы', '');
+  assert.equal(deniedCopy.headers.get('location'), '/admin/login');
+  assert.equal((await copyTemplate(copyUrl, 'Копия сметы', 'admin')).status, 403);
+  assert.equal((await copyTemplate(base + '/missing/copy', 'Копия сметы')).status, 404);
+  const blankCopy = await copyTemplate(copyUrl, '   ');
+  assert.equal(blankCopy.status, 422);
+  assert.match(await blankCopy.text(), /Заполните поле «Название копии»/);
+  const duplicateCopy = await copyTemplate(copyUrl, '  нОВАЯ   ВЕРСИЯ ');
+  assert.equal(duplicateCopy.status, 409);
+  assert.match(await duplicateCopy.text(), /Шаблон с таким названием/);
+  assert.equal(store.getEstimates().length, templateCount);
+
+  const copyResponse = await copyTemplate(copyUrl, '  Копия сметы  ');
+  assert.equal(copyResponse.status, 303);
+  const copied = store.getEstimates().find((estimate) => estimate.title === 'Копия сметы');
+  assert.ok(copied);
+  assert.notEqual(copied.id, original.id);
+  assert.equal(copied.revision, 1);
+  assert.equal(copied.isTemplate, true);
+  assert.deepEqual(copied.stages, original.stages);
+  assert.equal(copyResponse.headers.get('location'), `/admin/estimates/${copied.id}?saved=1`);
+  assert.equal(store.getEstimates().length, templateCount + 1);
+
+  const copyEditor = await fetch(new URL(copyResponse.headers.get('location'), base), { headers });
+  assert.equal(copyEditor.status, 200);
+  assert.match(await copyEditor.text(), /Копия сметы/);
+  const copyEdit = structuredClone(copied);
+  copyEdit.stages[0].groups[0].items[0].formulas.price = '=20';
+  assert.equal((await submit(base + '/' + copied.id, copyEdit)).status, 200);
+  const savedCopy = store.getEstimates().find((estimate) => estimate.id === copied.id);
+  assert.equal(savedCopy.stages[0].groups[0].items[0].formulas.price, '=20');
+  assert.deepEqual(store.getEstimates().find((estimate) => estimate.id === original.id), original);
 });

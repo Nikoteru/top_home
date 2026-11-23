@@ -1,26 +1,33 @@
 <div class="calc-matches__content" data-match-count="<%= matches.length %>">
-  <p class="calc-matches__count" aria-live="polite">Найдено: <strong><%= matches.length %></strong></p>
   <% if (matches.length) { %>
     <div class="calc-projects-list">
       <% matches.forEach(function(house) { %>
-        <% const { cover, illustrated } = projectMedia(house); %>
+        <% const { cover, illustrated } = projectMedia(house);
+           const labels = getHouseParameterFields(house, calc)
+             .filter((field) => field.id === '1' || field.id === '3')
+             .flatMap((field) => field.options.filter((option) => field.selectedIds.includes(String(option.id))).map((option) => option.title)); %>
         <article class="calc-project" data-project-id="<%= house.id %>">
-          <a href="/houses/<%= encodeURIComponent(house.id) %>" class="calc-project__image" tabindex="-1" aria-hidden="true">
-            <img src="<%= cover %>" alt="" loading="lazy">
-            <% if (illustrated) { %><span class="media-caption">Визуализация</span><% } %>
+          <a href="/houses/<%= encodeURIComponent(house.id) %>" class="calc-project__link" aria-labelledby="calc-project-<%= house.id %>">
+            <span class="calc-project__image"><img src="<%= cover %>" alt="" loading="lazy"></span>
+            <span class="calc-project__labels">
+              <% labels.forEach((label) => { %><span><%= label %></span><% }); %>
+              <% if (illustrated) { %><span class="calc-project__visualization">Визуализация</span><% } %>
+            </span>
+            <div class="calc-project__body">
+              <div>
+                <h3 id="calc-project-<%= house.id %>"><%= house.title %></h3>
+                <% if (house.area) { %><span class="calc-project__area"><%= house.area %></span><% } %>
+              </div>
+              <span class="calc-project__arrow" aria-hidden="true">↗</span>
+            </div>
           </a>
-          <div class="calc-project__body">
-            <h3><a href="/houses/<%= encodeURIComponent(house.id) %>"><%= house.title %></a></h3>
-            <span class="calc-project__area"><%= house.area %></span>
-            <a href="/houses/<%= encodeURIComponent(house.id) %>" class="btn btn-outline btn-small">Подробнее о проекте</a>
-          </div>
         </article>
       <% }); %>
     </div>
   <% } else { %>
     <div class="calc-empty">
       <h3>Подходящих проектов пока нет</h3>
-      <p>Расширьте диапазон площади или измените выбранные параметры.</p>
+      <p>Измените запрос, диапазон площади или выбранные параметры.</p>
       <a href="/calculator" class="calc-reset" data-calc-reset>Сбросить фильтры</a>
       <a href="#form" class="btn btn-outline btn-small">Помочь с подбором</a>
     </div>

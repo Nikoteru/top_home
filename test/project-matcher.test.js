@@ -88,6 +88,12 @@ test('server page, dynamic results, leads and admin settings use the new price-f
   assert.match(await fragment.text(), /data-match-count="1"/);
   const broad = await fetch(base + '/calculator/matches?areaMin=60&areaMax=400');
   assert.match(await broad.text(), /data-project-id="5"/);
+  const search = await fetch(base + '/calculator/matches?areaMin=98&areaMax=146&q=' + encodeURIComponent('ГОРИЗОНТ'));
+  const searchHtml = await search.text();
+  assert.match(searchHtml, /data-match-count="1"/);
+  assert.match(searchHtml, /data-project-id="1"/);
+  const sorted = await fetch(base + '/calculator/matches?areaMin=98&areaMax=146&sort=area-desc');
+  assert.deepEqual([...(await sorted.text()).matchAll(/data-project-id="(\d+)"/g)].map(([, id]) => id), ['1', '3', '2']);
   const empty = await fetch(base + '/calculator/matches?block-1=3');
   assert.match(await empty.text(), /Подходящих проектов пока нет/);
 

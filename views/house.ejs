@@ -13,74 +13,76 @@
 <body>
   <%- include('partials/header') %>
 
-  <main class="container house-detail">
-    <nav class="breadcrumb">
+  <main>
+    <nav class="container breadcrumb project-breadcrumb">
       <a href="/">Главная</a> <span>/</span> <a href="/projects">Проекты</a> <span>/</span> <span><%= house.title %></span>
     </nav>
 
-    <header class="project-heading">
-      <div>
-        <h1><%= house.title %></h1>
-        <div class="house-detail-meta">
-          <% if (house.area) { %><span class="house-detail-area"><%= house.area %></span><% } %>
-          <% if (house.price) { %><strong class="house-detail-price"><%= house.price %></strong><% } %>
+    <%- include('partials/public-gallery', { media, featured: true }) %>
+
+    <div class="container house-detail project-detail">
+      <header class="project-heading">
+        <div>
+          <h1><%= house.title %></h1>
+          <div class="house-detail-meta">
+            <% if (house.area) { %><span class="house-detail-area"><%= house.area %></span><% } %>
+            <% if (house.price) { %><strong class="house-detail-price"><%= house.price %></strong><% } %>
+          </div>
         </div>
+        <a href="#form" class="btn btn-accent">Получить презентацию</a>
+      </header>
+      <div class="house-detail-body">
+        <div class="house-detail-main">
+          <p class="house-detail-description"><%= house.fullDescription || house.description %></p>
+
+          <% if (specs.length > 0) { %>
+            <h2 class="section-title section-title--left">Характеристики</h2>
+            <dl class="specs-table">
+              <% specs.forEach(function(spec) { %>
+                <div class="specs-row">
+                  <dt><%= spec.label %></dt>
+                  <dd><%= spec.value %></dd>
+                </div>
+              <% }); %>
+            </dl>
+          <% } %>
+        </div>
+
+        <aside class="house-detail-side" id="form">
+          <div class="house-detail-card">
+            <h2>Получить презентацию</h2>
+            <p>Пришлём планировки и расчёт стоимости проекта.</p>
+            <form action="/request" method="POST" class="side-form" data-lead-form novalidate>
+              <input type="hidden" name="returnTo" value="/houses/<%= house.id %>">
+              <%- include('partials/lead-contact-fields') %>
+              <p class="cta-form__hint side-form__hint" data-form-hint aria-live="polite">Укажите телефон или e-mail — достаточно одного варианта.</p>
+              <button type="submit" class="btn btn-accent">Отправить заявку</button>
+            </form>
+            <% if (sent) { %>
+              <p class="side-form__success" role="status">Спасибо! Заявка отправлена, мы скоро свяжемся с вами.</p>
+            <% } %>
+            <% if (formError) { %>
+              <p class="side-form__error" role="alert">Укажите имя и проверьте телефон или e-mail.</p>
+            <% } %>
+          </div>
+        </aside>
       </div>
-      <a href="#form" class="btn btn-accent">Получить презентацию</a>
-    </header>
-    <%- include('partials/public-gallery', { media }) %>
 
-    <div class="house-detail-body">
-      <div class="house-detail-main">
-        <p class="house-detail-description"><%= house.fullDescription || house.description %></p>
+      <% if (inclusions.sections.length) { %>
+        <%- include('partials/house-inclusions', { inclusions }) %>
+      <% } %>
 
-        <% if (specs.length > 0) { %>
-          <h2 class="section-title section-title--left">Характеристики</h2>
-          <dl class="specs-table">
-            <% specs.forEach(function(spec) { %>
-              <div class="specs-row">
-                <dt><%= spec.label %></dt>
-                <dd><%= spec.value %></dd>
-              </div>
+      <% if (otherHouses.length > 0) { %>
+        <section class="related-houses">
+          <h2 class="section-title">Другие проекты</h2>
+          <div class="houses-grid">
+            <% otherHouses.forEach(function(otherHouse) { %>
+              <%- include('partials/project-card', { house: otherHouse, showDescription: false }) %>
             <% }); %>
-          </dl>
-        <% } %>
-      </div>
-
-      <aside class="house-detail-side" id="form">
-        <div class="house-detail-card">
-          <h2>Получить презентацию</h2>
-          <p>Пришлём планировки и расчёт стоимости проекта.</p>
-          <form action="/request" method="POST" class="side-form" data-lead-form novalidate>
-            <input type="hidden" name="returnTo" value="/houses/<%= house.id %>">
-            <%- include('partials/lead-contact-fields') %>
-            <p class="cta-form__hint side-form__hint" data-form-hint aria-live="polite">Укажите телефон или e-mail — достаточно одного варианта.</p>
-            <button type="submit" class="btn btn-accent">Отправить заявку</button>
-          </form>
-          <% if (sent) { %>
-            <p class="side-form__success" role="status">Спасибо! Заявка отправлена, мы скоро свяжемся с вами.</p>
-          <% } %>
-          <% if (formError) { %>
-            <p class="side-form__error" role="alert">Укажите имя и проверьте телефон или e-mail.</p>
-          <% } %>
-        </div>
-      </aside>
+          </div>
+        </section>
+      <% } %>
     </div>
-
-    <% if (inclusions.sections.length) { %>
-      <%- include('partials/house-inclusions', { inclusions }) %>
-    <% } %>
-
-    <% if (otherHouses.length > 0) { %>
-      <section class="related-houses">
-        <h2 class="section-title">Другие проекты</h2>
-        <div class="houses-grid">
-          <% otherHouses.forEach(function(otherHouse) { %>
-            <%- include('partials/project-card', { house: otherHouse, showDescription: false }) %>
-          <% }); %>
-        </div>
-      </section>
-    <% } %>
   </main>
 
   <%- include('partials/footer') %>

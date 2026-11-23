@@ -124,6 +124,14 @@ function asEstimateTemplate(estimate) {
   return { id: estimate.id, revision: estimate.revision, title: estimate.title, isTemplate: true, stages };
 }
 
+function copyEstimateTemplate(estimate, name) {
+  return {
+    isTemplate: true,
+    title: title(name, 'Название копии'),
+    stages: structuredClone(asEstimateTemplate(estimate).stages),
+  };
+}
+
 function getEstimateEditorDraft(estimate, constructionStages) {
   const template = asEstimateTemplate(estimate);
   const stages = template.stages.map((stage) => {
@@ -183,6 +191,6 @@ function normalizeEstimateRun(draft, template) {
 }
 
 module.exports = {
-  EstimateValidationError, normalizeEstimateUnit, normalizeEstimateTemplate, asEstimateTemplate, getEstimateEditorDraft,
+  EstimateValidationError, normalizeEstimateUnit, normalizeEstimateTemplate, asEstimateTemplate, copyEstimateTemplate, getEstimateEditorDraft,
   normalizeEstimateRun,
 };

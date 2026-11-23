@@ -114,7 +114,9 @@ test('admin forms save and clear multipart selections, and calculator deletion c
   ];
   const otherProject = structuredClone(state.houses[1]);
   state.houses[0].image = '/images/placeholder-1.svg';
-  state.houses[0].gallery = ['/images/gallery-1-1.svg', '/uploads/missing-presentation-image.jpg'];
+  const examplePhoto = '/images/gallery-1-1.svg';
+  state.houses[0].gallery = [examplePhoto, '/uploads/missing-presentation-image.jpg'];
+  state.houses[0].showOnHome = true;
   const store = require('../src/data/store');
   const leads = require('../src/data/leadsStore');
   const estimates = require('../src/data/estimatesStore');
@@ -152,6 +154,46 @@ test('admin forms save and clear multipart selections, and calculator deletion c
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
   const adminHeaders = { 'x-test-admin': '1' };
+
+  const cardCover = /<a href="\/houses\/1" class="house-card__image"[^>]*>\s*<img src="([^"]+)"/;
+  const coverPages = [
+    ['/admin/houses', /<img\b(?=[^>]*\bclass="[^"]*\badmin-preview--house\b)[^>]*\bsrc="([^"]+)"/],
+    ['/', cardCover],
+    ['/projects', cardCover],
+    ['/houses/1', /id="galleryMain"[^>]*>\s*<img src="([^"]+)"/],
+    ['/calculator/matches', /<article class="calc-project" data-project-id="1">\s*<a[^>]*>\s*<span class="calc-project__image"><img src="([^"]+)"/],
+  ];
+  async function assertProjectCover(expected, expectedGallery) {
+    await Promise.all(coverPages.map(async ([route, pattern]) => {
+      const response = await fetch(base + route, { headers: adminHeaders });
+      assert.equal(response.status, 200, route);
+      const html = await response.text();
+      assert.equal(html.match(pattern)?.[1], expected, route);
+      if (route === '/houses/1') {
+        const gallery = html.match(/window\.HOUSE_GALLERY = ([^\r\n]+);/)?.[1];
+        assert.deepEqual(JSON.parse(gallery), expectedGallery);
+        assert.match(html, /data-gallery-step="-1"/);
+        assert.match(html, /data-gallery-step="1"/);
+        assert.match(html, /data-caption="Пример изображения"/);
+      }
+    }));
+  }
+
+  const firstHouse = state.houses[0];
+  const savedCover = firstHouse.image;
+  const savedGallery = firstHouse.gallery;
+  const demoCover = '/images/site/horizon.webp';
+  const galleryPhoto = '/images/site/panorama.webp';
+  const chosenCover = '/images/site/compact.webp';
+  await assertProjectCover(demoCover, [demoCover, examplePhoto]);
+  firstHouse.gallery = [...savedGallery, galleryPhoto];
+  await assertProjectCover(galleryPhoto, [galleryPhoto, examplePhoto]);
+  firstHouse.image = chosenCover;
+  firstHouse.gallery.push(chosenCover, galleryPhoto);
+  await assertProjectCover(chosenCover, [chosenCover, galleryPhoto, examplePhoto]);
+  firstHouse.image = savedCover;
+  firstHouse.gallery = savedGallery;
+
   async function submit(route, entries, authenticated = true, status = 302) {
     const body = new FormData();
     for (const [key, value] of entries) body.append(key, value);
@@ -289,6 +331,7 @@ test('admin forms save and clear multipart selections, and calculator deletion c
   assert.equal([...pdfObjects.matchAll(/\/Subtype \/Image\b/g)].length, 2);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await archive.file('Смета.xlsx').async('nodebuffer'));
+  assert.deepEqual(workbook.worksheets.map((worksheet) => worksheet.name), ['Смета']);
   const sheet = workbook.getWorksheet('Смета');
   assert.equal(sheet.getCell('A1').value, estimateRun.title);
   assert.equal(sheet.lastRow.getCell(6).value, 27);

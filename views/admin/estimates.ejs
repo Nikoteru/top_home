@@ -21,9 +21,25 @@
     <% if (!estimates.length) { %>
       <p>Сохранённых шаблонов пока нет.</p>
     <% } %>
-    <% estimates.forEach(function(estimate) { %>
+    <% estimates.forEach(function(estimate) {
+      const estimateId = encodeURIComponent(estimate.id);
+      const error = copyError?.id === estimate.id ? copyError : null;
+    %>
       <article class="admin-card estimate-list-item">
-        <h3><a href="/admin/estimates/<%= estimate.id %>"><%= estimate.title %></a></h3>
+        <h3><a href="/admin/estimates/<%= estimateId %>"><%= estimate.title %></a></h3>
+        <details class="estimate-template-copy"<%= error ? ' open' : '' %>>
+          <summary class="btn btn-outline btn-small">Скопировать шаблон</summary>
+          <form class="admin-upload-form" method="post" action="/admin/estimates/<%= estimateId %>/copy">
+            <% if (error) { %>
+              <div class="alert alert-error" role="alert" id="estimate-copy-error-<%= estimateId %>"><%= error.message %></div>
+            <% } %>
+            <label>Уникальное название копии
+              <input type="text" name="title" value="<%= error?.title || '' %>" required
+                     <% if (error) { %>aria-invalid="true" aria-describedby="estimate-copy-error-<%= estimateId %>" autofocus<% } %>>
+            </label>
+            <button type="submit" class="btn btn-accent btn-small">Создать копию</button>
+          </form>
+        </details>
       </article>
     <% }); %>
   </main>

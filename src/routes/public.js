@@ -1,14 +1,15 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const asyncRoute = require('../middleware/asyncRoute');
 const { getContent } = require('../data/store');
-const { getHomeHeadings } = require('../data/homeHeadings');
+const { getHomePage } = require('../utils/homePage');
 const { addLead } = require('../data/leadsStore');
 const { isValidRuPhone, isValidEmail, formatRuPhone } = require('../utils/validate');
-const { getAreaLimits, normalizeProjectFilters, matchProjects, describeProjectFilters } = require('../utils/projectMatcher');
+const { getAreaLimits, normalizeProjectFilters, projectArea, matchProjects, describeProjectFilters } = require('../utils/projectMatcher');
 const { ICONS } = require('../data/calcIcons');
-const { getHouseSpecs } = require('../utils/houseParameters');
+const { getHouseSpecs, getHouseParameterFields } = require('../utils/houseParameters');
 const { getHouseInclusions } = require('../utils/houseInclusions');
-const { availableImage, publicPhotos, projectMedia, portfolioMedia } = require('../utils/publicMedia');
+const { stageGallery, projectMedia, portfolioMedia } = require('../utils/publicMedia');
 
 const individualPlanningPath = '/individual-planning';
 
@@ -54,22 +55,15 @@ const requestLimiter = rateLimit({
   message: { error: 'Слишком много заявок подряд. Попробуйте снова через несколько минут.' },
 });
 
-router.get('/', (req, res) => {
-  const content = getContent();
-  // На главную попадают только дома с галочкой «Показывать на главной».
-  // У старых записей поля нет — считаем их показанными, как было раньше.
-  const homeHouses = content.houses.filter((h) => h.showOnHome !== false);
-  const illustratedHero = !availableImage(content.hero.image) || content.hero.image === '/images/placeholder-hero.svg';
+router.get('/', asyncRoute(async (req, res) => {
+  const content = await getContent();
   res.render('index', {
     content,
-    homeHeadings: getHomeHeadings(content),
-    homeHouses,
-    illustratedHero,
-    advantages: content.advantages.map((item) => ({ ...item, image: availableImage(item.image) ? item.image : null })),
+    homepage: getHomePage(content),
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
   });
-});
+}));
 
 // Вытаскиваем число из строк вида "от 6 200 000 ₽" или "146 м²" для сортировки.
 // Если числа нет, возвращаем null — такие проекты уходят в конец списка.
@@ -87,8 +81,8 @@ const PROJECT_SORTS = {
 };
 
 // Каталог всех проектов (не только топ-5 с главной) с сортировкой по цене/площади.
-router.get('/projects', (req, res) => {
-  const content = getContent();
+router.get('/projects', asyncRoute(async (req, res) => {
+  const content = await getContent();
   const sort = Object.prototype.hasOwnProperty.call(PROJECT_SORTS, req.query.sort) ? req.query.sort : 'default';
   const { field, dir } = PROJECT_SORTS[sort];
 
@@ -113,30 +107,30 @@ router.get('/projects', (req, res) => {
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
   });
-});
+}));
 
-router.get(individualPlanningPath, (req, res) => {
+router.get(individualPlanningPath, asyncRoute(async (req, res) => {
   res.render('individual-planning', {
-    content: getContent(),
+    content: await getContent(),
     activePage: 'individual-planning',
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
     areaError: req.query.error === 'area',
   });
-});
+}));
 
 // Портфолио: реализованные объекты с фото, описанием, стоимостью и адресом.
-router.get('/portfolio', (req, res) => {
-  const content = getContent();
+router.get('/portfolio', asyncRoute(async (req, res) => {
+  const content = await getContent();
   res.render('portfolio', {
     content,
     items: content.portfolio || [],
     activePage: 'portfolio',
   });
-});
+}));
 
-router.get('/portfolio/:id', (req, res) => {
-  const content = getContent();
+router.get('/portfolio/:id', asyncRoute(async (req, res) => {
+  const content = await getContent();
   const items = content.portfolio || [];
   const item = items.find((p) => String(p.id) === req.params.id);
   if (!item) return res.status(404).render('404', { content });
@@ -154,7 +148,7 @@ router.get('/portfolio/:id', (req, res) => {
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
   });
-});
+}));
 
 function projectFiltersFromQuery(calc, query) {
   return normalizeProjectFilters(calc, {
@@ -164,49 +158,61 @@ function projectFiltersFromQuery(calc, query) {
   });
 }
 
+function pickerResults(content, query) {
+  const calc = content.calculator;
+  const filters = projectFiltersFromQuery(calc, query);
+  const search = typeof query.q === 'string' ? query.q.trim().slice(0, 100) : '';
+  const sort = ['area-asc', 'area-desc'].includes(query.sort) ? query.sort : 'default';
+  const searchKey = (value) => value.toLocaleLowerCase('ru').replaceAll('ё', 'е');
+  const name = searchKey(search);
+  const matches = matchProjects(content.houses, calc, filters)
+    .filter((house) => !name || searchKey(String(house.title || '')).includes(name));
+  if (sort !== 'default') {
+    const direction = sort === 'area-asc' ? 1 : -1;
+    matches.sort((a, b) => direction * (projectArea(a.area) - projectArea(b.area)));
+  }
+  return { calc, filters, search, sort, matches, getHouseParameterFields };
+}
+
 // Подбор по тем же характеристикам, которые заданы в карточках проектов.
-router.get('/calculator', (req, res) => {
-  const content = getContent();
+router.get('/calculator', asyncRoute(async (req, res) => {
+  const content = await getContent();
   const calc = content.calculator;
   if (!calc) return res.status(404).render('404', { content });
-  const filters = projectFiltersFromQuery(calc, req.query);
   res.render('calculator', {
     content,
-    calc,
+    ...pickerResults(content, req.query),
     icons: ICONS,
     area: getAreaLimits(calc),
-    filters,
-    matches: matchProjects(content.houses, calc, filters),
     activePage: 'calculator',
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
   });
-});
+}));
 
 // Тот же серверный подбор для обновления результатов без перезагрузки.
-router.get('/calculator/matches', (req, res) => {
-  const content = getContent();
+router.get('/calculator/matches', asyncRoute(async (req, res) => {
+  const content = await getContent();
   if (!content.calculator) return res.sendStatus(404);
-  const filters = projectFiltersFromQuery(content.calculator, req.query);
   res.set('Cache-Control', 'no-store');
-  res.render('partials/project-matches', { matches: matchProjects(content.houses, content.calculator, filters) });
-});
+  res.render('partials/project-matches', pickerResults(content, req.query));
+}));
 
 // Этапы стройки: вертикальная лента от подготовки участка до наружных сетей.
-router.get('/stages', (req, res) => {
-  const content = getContent();
+router.get('/stages', asyncRoute(async (req, res) => {
+  const content = await getContent();
   res.render('stages', {
     content,
-    stages: (content.stages || []).map((stage) => ({ ...stage, photos: publicPhotos(stage.photos) })),
+    stages: (content.stages || []).map((stage) => ({ ...stage, gallery: stageGallery(stage) })),
     activePage: 'stages',
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
   });
-});
+}));
 
 // Страница отдельного дома: галерея фото, полное описание, характеристики.
-router.get('/houses/:id', (req, res) => {
-  const content = getContent();
+router.get('/houses/:id', asyncRoute(async (req, res) => {
+  const content = await getContent();
   const house = content.houses.find((h) => String(h.id) === req.params.id);
   if (!house) return res.status(404).render('404', { content });
 
@@ -221,13 +227,13 @@ router.get('/houses/:id', (req, res) => {
     sent: req.query.sent === '1',
     formError: req.query.error === '1',
   });
-});
+}));
 
 // Заявка с формы сохраняется в список обращений (со статусом "новая")
 // и становится видна администратору в разделе /admin/requests.
 // Требования: имя обязательно, из телефона/e-mail — хотя бы одно поле,
 // и заполненное поле должно проходить валидацию формата.
-router.post('/request', requestLimiter, (req, res) => {
+router.post('/request', requestLimiter, asyncRoute(async (req, res) => {
   const { name, phone, email, returnTo } = req.body;
   const trimmedName = (name || '').trim();
   const trimmedPhone = (phone || '').trim();
@@ -248,16 +254,16 @@ router.post('/request', requestLimiter, (req, res) => {
 
   const details = target === individualPlanningPath
     ? individualPlanningDetails(req.body.area)
-    : calcDetailsFromRequest(req.body.calc, getContent());
+    : calcDetailsFromRequest(req.body.calc, await getContent());
   if (details === null) return res.redirect(`${target}?error=area#form`);
 
-  addLead({
+  await addLead({
     name: trimmedName,
     phone: trimmedPhone ? formatRuPhone(trimmedPhone) : '',
     email: trimmedEmail,
     details,
   });
   res.redirect(`${target}?sent=1#form`);
-});
+}));
 
 module.exports = router;

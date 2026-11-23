@@ -27,31 +27,33 @@
     <% } else { %>
       <div class="stages-layout">
         <ol class="timeline" aria-label="Этапы строительства">
-          <% stages.forEach(function(stage, i) { var count = (stage.photos || []).length; %>
+          <% stages.forEach(function(stage, i) { const photoCount = stage.gallery.filter(({ kind }) => kind === 'photo').length; %>
             <li class="timeline__item">
               <button type="button" class="timeline__btn <%= i === 0 ? 'is-active' : '' %>"
                       data-stage-id="<%= stage.id %>" aria-controls="stage-panel-<%= stage.id %>" aria-pressed="<%= i === 0 %>">
                 <span class="timeline__dot"><%= i + 1 %></span>
                 <span class="timeline__title"><%= stage.title %></span>
-                <% if (count > 0) { %><span class="timeline__badge"><%= count %> фото</span><% } %>
+                <% if (stage.gallery.length) { %><span class="timeline__badge"><%= photoCount ? photoCount + ' фото' : 'Примеры' %></span><% } %>
               </button>
             </li>
           <% }); %>
         </ol>
 
         <div class="stage-panel" id="stagePanel" aria-live="polite">
-          <% stages.forEach(function(stage, i) { var photos = stage.photos || []; %>
+          <% stages.forEach(function(stage, i) { %>
             <section class="stage-panel__item" id="stage-panel-<%= stage.id %>" data-stage-id="<%= stage.id %>" <%= i !== 0 ? 'hidden' : '' %>>
               <span class="stage-panel__step">Этап <%= i + 1 %> из <%= stages.length %></span>
               <h2 class="stage-panel__title"><%= stage.title %></h2>
               <% if (stage.description) { %>
                 <p class="stage-panel__text"><%= stage.description %></p>
               <% } %>
-              <% if (photos.length > 0) { %>
-                <div class="stage-panel__photos" data-stage-gallery="<%= JSON.stringify(photos) %>">
-                  <% photos.forEach(function(photo, pi) { %>
-                    <button type="button" class="stage-panel__photo" data-index="<%= pi %>" aria-label="Увеличить фото <%= pi + 1 %>">
-                      <img src="<%= photo %>" alt="<%= stage.title %> — фото <%= pi + 1 %>" loading="lazy">
+              <% if (stage.gallery.length) { %>
+                <div class="stage-panel__photos" data-stage-gallery="<%= JSON.stringify(stage.gallery.map(({ src }) => src)) %>">
+                  <% stage.gallery.forEach(function(image, pi) { %>
+                    <% const label = { illustration: 'Иллюстрация', example: 'Пример', photo: 'Фото' }[image.kind]; %>
+                    <button type="button" class="stage-panel__photo" data-kind="<%= image.kind %>" data-index="<%= pi %>" aria-label="<%= label %> <%= pi + 1 %>. Открыть на весь экран">
+                      <img src="<%= image.src %>" alt="<%= stage.title %> — <%= label.toLowerCase() %> <%= pi + 1 %>" loading="lazy">
+                      <% if (image.kind !== 'photo') { %><span class="media-caption"><%= label %></span><% } %>
                     </button>
                   <% }); %>
                 </div>

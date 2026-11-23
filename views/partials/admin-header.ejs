@@ -1,31 +1,72 @@
+<%
+  const estimates = [{ id: 'estimateRuns', path: '/admin/estimate-runs', label: 'Расчёт смет' }];
+  if (isSuperadmin) estimates.push({ id: 'estimates', path: '/admin/estimates', label: 'Шаблоны смет' });
+
+  const groups = [
+    { id: 'site', label: 'Сайт', links: [
+      { id: 'home', path: '/admin/home', label: 'Главная страница' },
+      { id: 'portfolio', path: '/admin/portfolio', label: 'Портфолио' },
+      { id: 'stages', path: '/admin/stages', label: 'Этапы стройки' },
+      { id: 'contacts', path: '/admin/contacts', label: 'Контакты' },
+    ] },
+    { id: 'projects', label: 'Проекты', links: [
+      { id: 'houses', path: '/admin/houses', label: 'Все проекты' },
+      { id: 'calculator', path: '/admin/calculator', label: 'Подбор проектов' },
+      { id: 'calculatorDirectory', path: '/admin/calculator/directory', label: 'Справочник' },
+    ] },
+    { id: 'estimates', label: 'Сметы', links: estimates },
+  ];
+  const serviceLinks = [
+    { id: 'requests', path: '/admin/requests', label: 'Обращения', count: newRequestsCount },
+    { id: 'settings', path: '/admin/settings', label: 'Настройки' },
+  ];
+  const current = [...groups.flatMap(({ links }) => links), ...serviceLinks].find(({ id }) => id === active);
+%>
 <header class="admin-header">
   <div class="container admin-header-inner">
-    <span class="logo">Админка</span>
-    <nav class="admin-nav">
-      <a href="/admin/houses" class="<%= active === 'houses' ? 'is-active' : '' %>">Проекты</a>
-      <a href="/admin/portfolio" class="<%= active === 'portfolio' ? 'is-active' : '' %>">Портфолио</a>
-      <a href="/admin/stages" class="<%= active === 'stages' ? 'is-active' : '' %>">Этапы стройки</a>
-      <a href="/admin/calculator" class="<%= active === 'calculator' ? 'is-active' : '' %>">Подбор проектов</a>
-      <a href="/admin/calculator/directory" class="<%= active === 'calculatorDirectory' ? 'is-active' : '' %>">Справочник</a>
-      <a href="/admin/home" class="<%= active === 'home' ? 'is-active' : '' %>">Главная страница</a>
-      <a href="/admin/contacts" class="<%= active === 'contacts' ? 'is-active' : '' %>">Контакты</a>
-      <a href="/admin/requests" class="<%= active === 'requests' ? 'is-active' : '' %>">
-        Обращения
-        <% if (newRequestsCount > 0) { %>
-          <span class="admin-badge"><%= newRequestsCount %></span>
-        <% } %>
-      </a>
-      <a href="/admin/estimate-runs" class="<%= active === 'estimateRuns' ? 'is-active' : '' %>">Расчёт смет</a>
-      <% if (isSuperadmin) { %>
-        <a href="/admin/estimates" class="<%= active === 'estimates' ? 'is-active' : '' %>">Шаблоны смет</a>
-      <% } %>
-      <a href="/admin/settings" class="<%= active === 'settings' ? 'is-active' : '' %>">Настройки</a>
-    </nav>
-    <div class="admin-header-actions">
-      <a href="/" target="_blank" class="btn btn-outline btn-small">Открыть сайт</a>
-      <form method="POST" action="/admin/logout">
-        <button type="submit" class="btn btn-ghost btn-small">Выйти</button>
-      </form>
+    <div class="admin-header-brand">
+      <a class="logo" href="/admin/houses">Админка</a>
+      <% if (current) { %><span class="admin-header-current"><%= current.label %></span><% } %>
+    </div>
+
+    <button type="button" class="admin-menu-toggle" aria-controls="admin-navigation" aria-expanded="false">
+      Меню
+      <% if (newRequestsCount > 0) { %><span class="admin-badge" aria-label="Новых обращений <%= newRequestsCount %>"><%= newRequestsCount %></span><% } %>
+    </button>
+
+    <div class="admin-header-navigation" id="admin-navigation">
+      <nav class="admin-nav" aria-label="Разделы админки">
+        <% groups.forEach((group) => { %>
+          <% if (group.links.length === 1) { const link = group.links[0]; %>
+            <a class="admin-nav__link" href="<%= link.path %>"<% if (active === link.id) { %> aria-current="page"<% } %>><%= link.label %></a>
+          <% } else { %>
+            <div class="admin-nav__group">
+              <button type="button" class="admin-nav__toggle<%= group.links.includes(current) ? ' is-active' : '' %>"
+                      aria-controls="admin-nav-<%= group.id %>" aria-expanded="false"><%= group.label %></button>
+              <div class="admin-nav__links" id="admin-nav-<%= group.id %>">
+                <span class="admin-nav__label"><%= group.label %></span>
+                <% group.links.forEach((link) => { %>
+                  <a class="admin-nav__link" href="<%= link.path %>"<% if (active === link.id) { %> aria-current="page"<% } %>><%= link.label %></a>
+                <% }); %>
+              </div>
+            </div>
+          <% } %>
+        <% }); %>
+        <% serviceLinks.forEach((link) => { %>
+          <a class="admin-nav__link" href="<%= link.path %>"<% if (active === link.id) { %> aria-current="page"<% } %>>
+            <%= link.label %>
+            <% if (link.count > 0) { %><span class="admin-badge"><%= link.count %></span><% } %>
+          </a>
+        <% }); %>
+      </nav>
+
+      <div class="admin-header-actions">
+        <a href="/" target="_blank" rel="noopener" class="btn btn-outline btn-small">Открыть сайт</a>
+        <form method="POST" action="/admin/logout">
+          <button type="submit" class="btn btn-ghost btn-small">Выйти</button>
+        </form>
+      </div>
     </div>
   </div>
 </header>
+<script src="/js/admin-nav.js"></script>

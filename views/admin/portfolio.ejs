@@ -18,6 +18,8 @@
       <div class="alert alert-error"><%= error %></div>
     <% } %>
 
+    <%- include('../partials/admin-public-preview', { publicPath: '/portfolio', pageTitle: 'Портфолио' }) %>
+
     <div class="admin-section-header">
       <h2 class="admin-section-title">Портфолио — реализованные объекты</h2>
       <span class="admin-section-count"><%= items.length %> шт.</span>
@@ -39,10 +41,25 @@
     <% } %>
 
     <div class="admin-houses-list" id="housePages" data-storage-key="adminActivePortfolioId">
-      <% items.forEach(function(item, i) { var photos = item.photos || []; %>
+      <% items.forEach(function(item, i) {
+        const media = portfolioMedia(item);
+        const livePhotos = new Set(media.illustrated ? [] : media.photos);
+        const published = [];
+        const saved = [];
+        (Array.isArray(item.photos) ? item.photos : []).forEach((src, index) => {
+          (livePhotos.has(src) ? published : saved).push({ src, index });
+        });
+      %>
         <section class="admin-card admin-house-card" data-house-id="<%= item.id %>" <%= i !== 0 ? 'hidden' : '' %>>
           <div class="admin-card__row">
-            <img class="admin-preview admin-preview--house" src="<%= photos[0] || '/images/placeholder-new.svg' %>" alt="<%= item.title %>">
+            <div>
+              <% if (media.cover) { %>
+                <img class="admin-preview admin-preview--house" src="<%= media.cover %>" alt="<%= item.title %>">
+                <p class="field-hint">Обложка на сайте<%= media.illustrated ? ' · Визуализация' : '' %></p>
+              <% } else { %>
+                <p class="admin-empty admin-empty--small">Фото объекта пока нет.</p>
+              <% } %>
+            </div>
             <form method="POST" action="/admin/portfolio/<%= item.id %>" class="admin-upload-form">
               <label>Название
                 <input type="text" name="title" value="<%= item.title %>" required>
@@ -71,28 +88,26 @@
           </div>
 
           <div class="admin-gallery-section">
-            <h4>Фотографии <span class="field-hint">(<%= photos.length %> шт., первая — обложка)</span></h4>
-            <% if (photos.length > 0) { %>
+            <h4>Фотографии на сайте <span class="field-hint">(<%= published.length %>)</span></h4>
+            <% if (published.length) { %>
               <div class="admin-gallery-grid">
-                <% photos.forEach(function(photo, pi) { %>
+                <% published.forEach(function(photo, pi) { %>
                   <div class="admin-gallery-item <%= pi === 0 ? 'is-cover' : '' %>">
-                    <img src="<%= photo %>" alt="Фото <%= pi + 1 %>">
+                    <img src="<%= photo.src %>" alt="Фото <%= pi + 1 %>">
                     <% if (pi === 0) { %>
                       <span class="admin-cover-badge">Обложка</span>
                     <% } else { %>
-                      <form method="POST" action="/admin/portfolio/<%= item.id %>/photos/<%= pi %>/cover">
+                      <form method="POST" action="/admin/portfolio/<%= item.id %>/photos/<%= photo.index %>/cover">
                         <button type="submit" class="btn btn-outline btn-small">Сделать обложкой</button>
                       </form>
                     <% } %>
-                    <form method="POST" action="/admin/portfolio/<%= item.id %>/photos/<%= pi %>/delete"
+                    <form method="POST" action="/admin/portfolio/<%= item.id %>/photos/<%= photo.index %>/delete"
                           data-confirm-delete="Удалить это фото?">
                       <button type="submit" class="btn btn-danger btn-small">Удалить</button>
                     </form>
                   </div>
                 <% }); %>
               </div>
-            <% } else { %>
-              <p class="admin-empty admin-empty--small">Фотографий пока нет.</p>
             <% } %>
             <form method="POST" action="/admin/portfolio/<%= item.id %>/photos" enctype="multipart/form-data" class="admin-gallery-upload">
               <label>Добавить фото <span class="field-hint">(можно выбрать сразу несколько, до 30 за раз)</span>
@@ -101,6 +116,23 @@
               <button type="submit" class="btn btn-outline btn-small">Загрузить</button>
             </form>
           </div>
+
+          <% if (saved.length) { %>
+            <details class="admin-gallery-section">
+              <summary>Примеры и недоступные файлы <span class="field-hint">(<%= saved.length %>)</span></summary>
+              <ul>
+                <% saved.forEach(function(photo) { %>
+                  <li>
+                    <span class="field-hint"><%= String(photo.src || '').split('/').pop() %></span>
+                    <form method="POST" action="/admin/portfolio/<%= item.id %>/photos/<%= photo.index %>/delete"
+                          data-confirm-delete="Удалить этот файл из объекта?">
+                      <button type="submit" class="btn btn-danger btn-small">Удалить</button>
+                    </form>
+                  </li>
+                <% }); %>
+              </ul>
+            </details>
+          <% } %>
 
           <form method="POST" action="/admin/portfolio/<%= item.id %>/delete"
                 class="admin-delete-form"

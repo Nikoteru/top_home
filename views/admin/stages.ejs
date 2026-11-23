@@ -8,7 +8,8 @@
 </head>
 <body class="admin-body">
   <%- include('../partials/admin-header', { active: 'stages', newRequestsCount }) %>
-  <% var stages = content.stages || []; %>
+  <% const stages = (content.stages || []).map((stage) => ({ ...stage, gallery: stageGallery(stage) })); %>
+  <% const mediaLabels = { illustration: 'Иллюстрация', example: 'Пример', photo: 'Фото' }; %>
 
   <main class="container admin-main">
     <% if (saved) { %>
@@ -18,20 +19,26 @@
       <div class="alert alert-error"><%= error %></div>
     <% } %>
 
+    <%- include('../partials/admin-public-preview', { publicPath: '/stages', pageTitle: 'Этапы стройки' }) %>
+
     <div class="admin-section-header">
       <h2 class="admin-section-title">Этапы стройки</h2>
-      <span class="admin-section-count"><%= stages.length %> этапов, с фото — <%= stages.filter(function(s) { return (s.photos || []).length > 0; }).length %></span>
+      <span class="admin-section-count"><%= stages.length %> этапов, с изображениями — <%= stages.filter((stage) => stage.gallery.length).length %></span>
     </div>
-    <p class="field-hint admin-stages-hint">Этапы показываются на сайте в этом порядке. Нажмите на этап, чтобы изменить его и загрузить фото.
-      <a href="/stages" target="_blank" class="admin-map-check">Открыть на сайте ↗</a></p>
+    <p class="field-hint admin-stages-hint">Этапы показываются на сайте в этом порядке. Нажмите на этап, чтобы изменить его и загрузить фото.</p>
 
     <div class="admin-stages" id="adminStages">
-      <% stages.forEach(function(stage, i) { var photos = stage.photos || []; %>
+      <% stages.forEach(function(stage, i) { %>
+        <% const photoCount = stage.gallery.filter(({ kind }) => kind === 'photo').length; %>
         <details class="admin-stage" id="stage-<%= stage.id %>" data-stage-id="<%= stage.id %>">
           <summary class="admin-stage__summary">
             <span class="admin-stage__num"><%= i + 1 %></span>
             <span class="admin-stage__title"><%= stage.title %></span>
-            <span class="admin-stage__count <%= photos.length ? '' : 'is-empty' %>"><%= photos.length ? photos.length + ' фото' : 'нет фото' %></span>
+            <span class="admin-stage__count <%= stage.gallery.length ? '' : 'is-empty' %>">
+              <% if (photoCount) { %><%= photoCount %> фото
+              <% } else if (stage.gallery.length) { %>Примеры
+              <% } else { %>Нет изображений<% } %>
+            </span>
           </summary>
 
           <div class="admin-stage__body">
@@ -59,21 +66,47 @@
             </form>
 
             <div class="admin-gallery-section">
-              <h4>Фотографии этапа <span class="field-hint">(<%= photos.length %> шт.)</span></h4>
-              <% if (photos.length > 0) { %>
+              <h4>Галерея на сайте <span class="field-hint">(<%= stage.gallery.length %> шт.)</span>
+                <a href="/stages#stage-<%= encodeURIComponent(stage.id) %>" target="_blank" rel="noopener" class="admin-map-check">Открыть этап ↗</a>
+              </h4>
+              <% if (stage.gallery.length) { %>
                 <div class="admin-gallery-grid">
-                  <% photos.forEach(function(photo, pi) { %>
+                  <% stage.gallery.forEach(function(image, pi) { %>
                     <div class="admin-gallery-item">
-                      <img src="<%= photo %>" alt="Фото <%= pi + 1 %>" loading="lazy">
-                      <form method="POST" action="/admin/stages/<%= stage.id %>/photos/<%= pi %>/delete"
-                            data-confirm-delete="Удалить это фото?">
-                        <button type="submit" class="btn btn-danger btn-small">Удалить</button>
-                      </form>
+                      <img src="<%= image.src %>" alt="<%= mediaLabels[image.kind] %> <%= pi + 1 %>" loading="lazy">
+                      <% if (image.kind !== 'photo') { %><span class="field-hint"><%= mediaLabels[image.kind] %></span><% } %>
+                      <% if (Number.isInteger(image.storedIndex)) { %>
+                        <form method="POST" action="/admin/stages/<%= stage.id %>/photos/<%= image.storedIndex %>/delete"
+                              data-confirm-delete="Удалить это изображение?">
+                          <button type="submit" class="btn btn-danger btn-small">Удалить</button>
+                        </form>
+                      <% } else { %>
+                        <span class="field-hint">Показывается вместе с примерами этапа.</span>
+                      <% } %>
                     </div>
                   <% }); %>
                 </div>
               <% } else { %>
-                <p class="admin-empty admin-empty--small">Фотографий пока нет.</p>
+                <p class="admin-empty admin-empty--small">Загрузите фотографии для этого этапа.</p>
+              <% } %>
+              <% const storedPhotos = Array.isArray(stage.photos) ? stage.photos : []; %>
+              <% const published = new Set(stage.gallery.map(({ storedIndex }) => storedIndex)); %>
+              <% const unavailable = storedPhotos.map((src, index) => ({ src, index })).filter(({ index }) => !published.has(index)); %>
+              <% if (unavailable.length) { %>
+                <details>
+                  <summary class="field-hint">Недоступные файлы (<%= unavailable.length %>)</summary>
+                  <div class="admin-gallery-grid">
+                    <% unavailable.forEach(({ src, index }) => { %>
+                      <div class="admin-gallery-item">
+                        <span class="field-hint"><%= src %></span>
+                        <form method="POST" action="/admin/stages/<%= stage.id %>/photos/<%= index %>/delete"
+                              data-confirm-delete="Удалить запись об этом изображении?">
+                          <button type="submit" class="btn btn-danger btn-small">Удалить запись</button>
+                        </form>
+                      </div>
+                    <% }); %>
+                  </div>
+                </details>
               <% } %>
               <form method="POST" action="/admin/stages/<%= stage.id %>/photos" enctype="multipart/form-data" class="admin-gallery-upload">
                 <label>Добавить фото <span class="field-hint">(можно выбрать сразу несколько, до 30 за раз)</span>
